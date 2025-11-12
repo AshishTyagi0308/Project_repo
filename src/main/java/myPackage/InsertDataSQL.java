@@ -107,7 +107,7 @@ public class InsertDataSQL {
         // ----***Payment Table***----
         try {
             Connection con = DriverManager.getConnection(url, user, pass);
-            String sql = "INSERT INTO payment (Payment_ID, Pay_date, Paid_fee, Pending_fee, Due_date, Membership_ID) VALUES (?, ?, ?, ?, ?, ?)";
+            String sql = "INSERT INTO payment (Payment_ID, Pay_date, Paid_fee, Due_date, Membership_ID) VALUES (?, ?, ?, ?, ?)";
             PreparedStatement ps = con.prepareStatement(sql);
             SimpleDateFormat sdf = new SimpleDateFormat("dd-MM-yyyy");
 
@@ -127,15 +127,13 @@ public class InsertDataSQL {
 
                 // Example paid and pending fee logic
                 int paidFee = (i % 2 == 0) ? 2000 : 4000;
-                int pendingFee = (paidFee == 2000) ? 2000 : 0;
 
                 // Set parameters
                 ps.setInt(1, paymentId);
                 ps.setDate(2, payDate);
                 ps.setInt(3, paidFee);
-                ps.setInt(4, pendingFee);
-                ps.setDate(5, dueDate);
-                ps.setInt(6, membershipId);
+                ps.setDate(4, dueDate);
+                ps.setInt(5, membershipId);
 
                 ps.addBatch();
             }
