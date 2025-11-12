@@ -1,13 +1,17 @@
 package myPackage;
 
+import org.json.simple.JSONArray;
+import org.json.simple.JSONObject;
 import java.io.IOException;
 import java.io.PrintWriter;
 import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.sql.*;
 @SuppressWarnings("unchecked")
+@WebServlet("/DataTransmission")
 public class DataTransmission extends HttpServlet {
 	private static final long serialVersionUID = 1L;
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
@@ -21,7 +25,7 @@ public class DataTransmission extends HttpServlet {
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
             Connection con = DriverManager.getConnection(
-                "jdbc:mysql://localhost:3306/gym", "root", "yourpassword");
+                "jdbc:mysql://localhost:3306/gym", "root", "Ashish_mca@1234");
 
             Statement st = con.createStatement();
             ResultSet rs = st.executeQuery("SELECT * FROM member");
