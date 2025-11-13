@@ -105,7 +105,7 @@ public class InsertDataSQL {
         
         
         // ----***Payment Table***----
-        try {
+        /*try {
             Connection con = DriverManager.getConnection(url, user, pass);
             String sql = "INSERT INTO payment (Payment_ID, Pay_date, Paid_fee, Due_date, Membership_ID) VALUES (?, ?, ?, ?, ?)";
             PreparedStatement ps = con.prepareStatement(sql);
@@ -144,6 +144,6 @@ public class InsertDataSQL {
             con.close();
         } catch (Exception e) {
             e.printStackTrace();
-        }
+        }*/
     }
 }

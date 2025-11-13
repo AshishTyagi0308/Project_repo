@@ -12,11 +12,12 @@ import javax.servlet.http.HttpServletResponse;
 import java.sql.*;
 
 @SuppressWarnings("unchecked")
-@WebServlet("/DataTransmission")
-public class DataTransmission extends HttpServlet {
+@WebServlet("/TransferDataUser")
+public class TransferDataUser extends HttpServlet {
+
     private static final long serialVersionUID = 1L;
 
-    // Add CORS headers helper
+    // ✅ Add CORS headers helper
     private void addCORSHeaders(HttpServletResponse response) {
         response.setHeader("Access-Control-Allow-Origin", "*");
         response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
@@ -25,13 +26,16 @@ public class DataTransmission extends HttpServlet {
         response.setHeader("Access-Control-Allow-Credentials", "true");
     }
 
+    // ✅ Handle GET request
     @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+
         addCORSHeaders(response);
         response.setContentType("application/json");
         PrintWriter out = response.getWriter();
 
-        JSONArray membersArray = new JSONArray();
+        JSONArray usersArray = new JSONArray();
 
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
@@ -39,17 +43,15 @@ public class DataTransmission extends HttpServlet {
                     "jdbc:mysql://localhost:3306/gym", "root", "Ashish_mca@1234");
 
             Statement st = con.createStatement();
-            ResultSet rs = st.executeQuery("SELECT * FROM member");
+            ResultSet rs = st.executeQuery("SELECT * FROM user");
 
             while (rs.next()) {
-                JSONObject member = new JSONObject();
-                member.put("Member_ID", rs.getInt("Member_ID"));
-                member.put("Name", rs.getString("Name"));
-                member.put("DOB", rs.getDate("DOB").toString());
-                member.put("Gender", rs.getString("Gender"));
-                member.put("Phone_no", rs.getString("Phone_no"));
-                member.put("Address", rs.getString("Address"));
-                membersArray.add(member);
+                JSONObject user = new JSONObject();
+                user.put("username", rs.getString("Username"));
+                user.put("password", rs.getString("Password"));
+                user.put("role", rs.getString("Role"));
+                user.put("email", rs.getString("Email"));
+                usersArray.add(user); // ✅ add each JSON object to the array
             }
 
             con.close();
@@ -57,12 +59,14 @@ public class DataTransmission extends HttpServlet {
             e.printStackTrace();
         }
 
-        out.print(membersArray.toJSONString());
+        out.print(usersArray.toJSONString());
         out.flush();
     }
 
+    // ✅ Handle OPTIONS request (for CORS preflight)
     @Override
-    protected void doOptions(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    protected void doOptions(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
         addCORSHeaders(response);
         response.setStatus(HttpServletResponse.SC_OK);
     }
