@@ -6,6 +6,8 @@ import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.util.Arrays;
+import java.util.List;
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
@@ -14,32 +16,41 @@ import javax.servlet.http.HttpServletResponse;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+
 @SuppressWarnings("unchecked")
 @WebServlet("/AddNewUserAPI")
 public class AddNewUserAPI extends HttpServlet {
-	private static final long serialVersionUID = 1L;
-    // You can move DB config to environment or config file in production
+    private static final long serialVersionUID = 1L;
     private static final String DB_URL = "jdbc:mysql://localhost:3306/gym";
     private static final String DB_USER = "root";
     private static final String DB_PASSWORD = "Ashish_mca@1234";
 
-    private void addCORSHeaders(HttpServletResponse response) {
-        response.setHeader("Access-Control-Allow-Origin", "http://localhost:5173"); // Update if deploying
+    // List of allowed origins
+    private static final List<String> ALLOWED_ORIGINS = Arrays.asList(
+        "http://localhost:5173",
+        "https://wellness-management-system.vercel.app"
+    );
+
+    private void addCORSHeaders(HttpServletRequest request, HttpServletResponse response) {
+        String origin = request.getHeader("Origin");
+        if (origin != null && ALLOWED_ORIGINS.contains(origin)) {
+            response.setHeader("Access-Control-Allow-Origin", origin); // Set single, valid origin
+            response.setHeader("Access-Control-Allow-Credentials", "true");
+        }
         response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
         response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning");
         response.setHeader("Access-Control-Max-Age", "864000");
-        response.setHeader("Access-Control-Allow-Credentials", "true");
     }
 
     @Override
     protected void doOptions(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        addCORSHeaders(response);
+        addCORSHeaders(request, response);
         response.setStatus(HttpServletResponse.SC_OK);
     }
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        addCORSHeaders(response);
+        addCORSHeaders(request, response);
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
 
@@ -61,7 +72,7 @@ public class AddNewUserAPI extends HttpServlet {
             JsonObject jsonObject = gson.fromJson(sb.toString(), JsonObject.class);
             String username = jsonObject.get("username").getAsString().trim();
             String password = jsonObject.get("password").getAsString().trim();
-            String role = jsonObject.get("role").getAsString().trim().toLowerCase(); // convert to lowercase for DB consistency
+            String role = jsonObject.get("role").getAsString().trim().toLowerCase();
             String email = jsonObject.get("email").getAsString().trim();
 
             // Validate input
@@ -79,7 +90,7 @@ public class AddNewUserAPI extends HttpServlet {
                 PreparedStatement ps = conn.prepareStatement(sql);
                 ps.setString(1, username);
                 ps.setString(2, password);
-                ps.setString(3, role); // ensure value is lowercase
+                ps.setString(3, role);
                 ps.setString(4, email);
 
                 int rowsInserted = ps.executeUpdate();
@@ -93,7 +104,6 @@ public class AddNewUserAPI extends HttpServlet {
             }
         } catch (Exception e) {
             e.printStackTrace();
-            // Send detailed error for debugging; restrict this in production for security
             jsonResponse.addProperty("success", false);
             jsonResponse.addProperty("message", "Internal server error: " + e.getMessage());
         }

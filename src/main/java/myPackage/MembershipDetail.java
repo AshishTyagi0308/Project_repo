@@ -15,7 +15,7 @@ public class MembershipDetail extends HttpServlet {
 
     private static final String URL = "jdbc:mysql://localhost:3306/gym";
     private static final String USER = "root";
-    private static final String PASS = "stud102024su";
+    private static final String PASS = "Ashish_mca@1234";
 
     private void setCorsHeaders(HttpServletResponse resp, HttpServletRequest req) {
         String origin = req.getHeader("Origin");
@@ -53,11 +53,11 @@ public class MembershipDetail extends HttpServlet {
             Class.forName("com.mysql.cj.jdbc.Driver");
             try (Connection con = DriverManager.getConnection(URL, USER, PASS);
                  PreparedStatement pst = con.prepareStatement(
-                         "SELECT Membership_ID, Membership_type, Start_date, End_date, Total_fee FROM membership WHERE Member_ID = ?")) {
+                         "SELECT Member_ID, Membership_ID, Membership_type, Start_date, End_date, Total_fee FROM membership WHERE Member_ID = ?")) {
                 pst.setString(1, memberId);
 
                 try (ResultSet rs = pst.executeQuery()) {
-                    if (rs.next()) {
+                    while(rs.next()) {
                         JSONObject obj = new JSONObject();
                         obj.put("id", rs.getString("Membership_ID"));
                         obj.put("type", rs.getString("Membership_type"));
