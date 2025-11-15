@@ -7,12 +7,12 @@ public class InsertDataSQL {
 		// TODO Auto-generated method stub
 		String url = "jdbc:mysql://localhost:3306/gym"; // your DB name
         String user = "root"; // change if needed
-        String pass = "Ashish_mca@1234"; // change if needed
+        String pass = "stud102024su"; // change if needed
 
         
         
         // ----***Member Table***----
-       /* String[] names = {"Amit Sharma", "Priya Singh", "Rahul Mehta", "Sneha Gupta", "Vikas Yadav",
+        String[] names = {"Amit Sharma", "Priya Singh", "Rahul Mehta", "Sneha Gupta", "Vikas Yadav",
                           "Riya Patel", "Ankit Verma", "Neha Reddy", "Saurabh Jain", "Pooja Nair"};
         String[] gender = {"Male", "Female", "Male", "Female", "Male", "Female", "Male", "Female", "Male", "Female"};
         String[] dobList = {"12-05-1995", "25-03-1998", "17-11-1994", "08-01-2000", "02-06-1996",
@@ -49,11 +49,11 @@ public class InsertDataSQL {
             con.close();
         } catch (Exception e) {
             e.printStackTrace();
-        }*/
+        }
         
         
         
-        /*
+        
                 // ----***Membership Table***----
                 String[] types = {"General", "PT"};
 
@@ -98,7 +98,7 @@ public class InsertDataSQL {
                     con.close();
                 } catch (Exception e) {
                     e.printStackTrace();
-                }*/
+                }
         
         
         

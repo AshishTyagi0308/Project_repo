@@ -17,16 +17,16 @@ public class TransferDataUser extends HttpServlet {
 
     private static final long serialVersionUID = 1L;
 
-    // ✅ Add CORS headers helper
+    // Add CORS headers helper
     private void addCORSHeaders(HttpServletResponse response) {
         response.setHeader("Access-Control-Allow-Origin", "*");
         response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
         response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning");
         response.setHeader("Access-Control-Max-Age", "864000"); // cache preflight for 1 day
-        response.setHeader("Access-Control-Allow-Credentials", "true");
+        // Removed Access-Control-Allow-Credentials since wildcard origin is used
     }
 
-    // ✅ Handle GET request
+    // Handle GET request
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
@@ -45,25 +45,43 @@ public class TransferDataUser extends HttpServlet {
             Statement st = con.createStatement();
             ResultSet rs = st.executeQuery("SELECT * FROM user");
 
+            // Debug: check if any row is fetched
+            boolean hasData = false;
             while (rs.next()) {
+                hasData = true;
                 JSONObject user = new JSONObject();
+
+                // Use correct case for column names from your DB schema
                 user.put("username", rs.getString("Username"));
                 user.put("password", rs.getString("Password"));
                 user.put("role", rs.getString("Role"));
                 user.put("email", rs.getString("Email"));
-                usersArray.add(user); // ✅ add each JSON object to the array
+
+                usersArray.add(user);
             }
 
+            if(!hasData) {
+                System.out.println("No data found in user table.");
+            }
+
+            rs.close();
+            st.close();
             con.close();
         } catch (Exception e) {
             e.printStackTrace();
+            // Optional: send error response as JSON object
+            JSONObject err = new JSONObject();
+            err.put("error", e.getMessage());
+            out.print(err.toJSONString());
+            out.flush();
+            return;
         }
 
         out.print(usersArray.toJSONString());
         out.flush();
     }
 
-    // ✅ Handle OPTIONS request (for CORS preflight)
+    // Handle OPTIONS request (for CORS preflight)
     @Override
     protected void doOptions(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
