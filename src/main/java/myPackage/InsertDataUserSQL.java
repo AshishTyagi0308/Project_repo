@@ -7,9 +7,9 @@ public class InsertDataUserSQL {
 		// TODO Auto-generated method stub
 		String url = "jdbc:mysql://localhost:3306/gym"; // your DB name
         String user = "root"; // change if needed
-        String pass = "Ashish_mca@1234";
+        String pass = "stud102024su";
         
-        String[] names= {"Ashish Tyagi", "Gopal", "Krishna Yadav", "Yash Tyagi"};
+        String[] names= {"Ashish", "Gopal", "Krishna ", "Yash Tyagi"};
         String[] password= {"abcd@1234", "123", "mno@456", "uvw@789"};
         String[] role= {"admin", "admin", "admin", "therapist"};
         String[] email= {"ashish.tyagi@gmail.com", "gopalnavetia@gmail.com", "krishna.yadav@gmail.com", "yash.yt@gmail.com"};

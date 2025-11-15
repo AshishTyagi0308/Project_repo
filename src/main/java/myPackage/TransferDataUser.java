@@ -40,7 +40,7 @@ public class TransferDataUser extends HttpServlet {
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
             Connection con = DriverManager.getConnection(
-                    "jdbc:mysql://localhost:3306/gym", "root", "Ashish_mca@1234");
+                    "jdbc:mysql://localhost:3306/gym", "root", "stud102024su");
 
             Statement st = con.createStatement();
             ResultSet rs = st.executeQuery("SELECT * FROM user");
