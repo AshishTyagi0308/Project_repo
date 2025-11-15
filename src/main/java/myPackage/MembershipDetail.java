@@ -15,7 +15,7 @@ public class MembershipDetail extends HttpServlet {
 
     private static final String URL = "jdbc:mysql://localhost:3306/gym";
     private static final String USER = "root";
-    private static final String PASS = "Ashish_mca@1234";
+    private static final String PASS = "stud102024su";
 
     private void setCorsHeaders(HttpServletResponse resp, HttpServletRequest req) {
         String origin = req.getHeader("Origin");
