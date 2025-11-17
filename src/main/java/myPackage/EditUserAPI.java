@@ -7,6 +7,8 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.Arrays;
+import java.util.List;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -25,10 +27,16 @@ public class EditUserAPI extends HttpServlet {
     private static final String DB_URL = "jdbc:mysql://localhost:3306/gym";
     private static final String DB_USER = "root";
     private static final String DB_PASSWORD = "Ashish_mca@1234";
+    
+    private static final List<String> ALLOWED_ORIGINS = Arrays.asList(
+            "http://localhost:5173",
+            "https://wellness-management-system.vercel.app",
+            "https://admonitorial-cinderella-hungerly.ngrok-free.dev"
+        );
 
     // For all requests, add CORS headers
     private void addCorsHeaders(HttpServletRequest request, HttpServletResponse response) {
-        response.setHeader("Access-Control-Allow-Origin", "http://localhost:5173");
+        response.setHeader("Access-Control-Allow-Origin", "*");
         response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
         response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With,ngrok-skip-browser-warning");
         response.setHeader("Access-Control-Allow-Credentials", "true");

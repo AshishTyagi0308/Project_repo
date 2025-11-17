@@ -10,12 +10,20 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.sql.*;
+import java.util.Arrays;
+import java.util.List;
 
 @SuppressWarnings("unchecked")
 @WebServlet("/TransferDataUser")
 public class TransferDataUser extends HttpServlet {
 
     private static final long serialVersionUID = 1L;
+    
+    private static final List<String> ALLOWED_ORIGINS = Arrays.asList(
+            "http://localhost:5173",
+            "https://wellness-management-system.vercel.app",
+            "https://admonitorial-cinderella-hungerly.ngrok-free.dev"
+        );
 
     // Add CORS headers helper
     private void addCORSHeaders(HttpServletResponse response) {

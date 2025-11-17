@@ -8,26 +8,38 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.sql.*;
-
-@WebServlet("/MemberDetail/*") // Note the wildcard to support MemberDetail/{memberID}
+import java.util.Arrays;
+import java.util.List;
+@SuppressWarnings("unchecked")
+@WebServlet("/MemberDetail/*")
 public class MemberDetail extends HttpServlet {
     private static final long serialVersionUID = 1L;
 
     private static final String URL = "jdbc:mysql://localhost:3306/gym";
     private static final String USER = "root";
-    private static final String PASS = "Ashish_mca@1234"; // change this
+    private static final String PASS = "Ashish_mca@1234";
+    
+    private static final List<String> ALLOWED_ORIGINS = Arrays.asList(
+        "http://localhost:5173",
+        "https://wellness-management-system.vercel.app",
+        "https://admonitorial-cinderella-hungerly.ngrok-free.dev"
+    );
 
-    // Set dynamic CORS header for trusted origins only
     private void addCORSHeaders(HttpServletResponse response, HttpServletRequest request) {
         String origin = request.getHeader("Origin");
-        if (origin != null && (origin.contains("localhost") || origin.contains("ngrok-free.dev"))) {
+        if (origin != null && ALLOWED_ORIGINS.contains(origin)) {
             response.setHeader("Access-Control-Allow-Origin", origin);
             response.setHeader("Vary", "Origin");
+            response.setHeader("Access-Control-Allow-Credentials", "true");
         }
         response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-        response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning");
-        response.setHeader("Access-Control-Max-Age", "864000");
-        response.setHeader("Access-Control-Allow-Credentials", "true");
+        String reqHeaders = request.getHeader("Access-Control-Request-Headers");
+        if (reqHeaders != null) {
+            response.setHeader("Access-Control-Allow-Headers", reqHeaders);
+        } else {
+            response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning");
+        }
+        response.setHeader("Access-Control-Max-Age", "86400");
     }
 
     @Override
@@ -36,21 +48,16 @@ public class MemberDetail extends HttpServlet {
         response.setStatus(HttpServletResponse.SC_OK);
     }
 
-    // Helper to parse ID from either path or query
     private Integer getMemberId(HttpServletRequest request) {
-        // Try query string first (for /MemberDetail?id=500)
         String idParam = request.getParameter("id");
         if (idParam != null) {
-            try {
-                return Integer.parseInt(idParam);
-            } catch (NumberFormatException e) { return null; }
+            try { return Integer.parseInt(idParam); }
+            catch (NumberFormatException e) { return null; }
         }
-        // Try path info for REST style (/MemberDetail/500)
-        String pathInfo = request.getPathInfo(); // returns "/500"
+        String pathInfo = request.getPathInfo();
         if (pathInfo != null && pathInfo.length() > 1) {
-            try {
-                return Integer.parseInt(pathInfo.substring(1));
-            } catch (NumberFormatException e) { return null; }
+            try { return Integer.parseInt(pathInfo.substring(1)); }
+            catch (NumberFormatException e) { return null; }
         }
         return null;
     }
@@ -90,7 +97,7 @@ public class MemberDetail extends HttpServlet {
             }
             con.close();
         } catch (Exception e) {
-            addCORSHeaders(response, request); // Ensure CORS on error too!
+            addCORSHeaders(response, request);
             out.println("{\"error\":\"" + e.getMessage() + "\"}");
         }
     }

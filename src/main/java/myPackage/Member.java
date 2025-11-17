@@ -9,6 +9,8 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.sql.*;
+import java.util.Arrays;
+import java.util.List;
 @WebServlet("/Member")
 public class Member extends HttpServlet {
 	private static final long serialVersionUID = 1L;
@@ -16,6 +18,12 @@ public class Member extends HttpServlet {
     private static final String URL = "jdbc:mysql://localhost:3306/gym";
     private static final String USER = "root";
     private static final String PASS = "stud102024su"; // change this
+    
+    private static final List<String> ALLOWED_ORIGINS = Arrays.asList(
+            "http://localhost:5173",
+            "https://wellness-management-system.vercel.app",
+            "https://admonitorial-cinderella-hungerly.ngrok-free.dev"
+        );
 
     // 🔹 POST method - to add a new member
     @Override

@@ -7,6 +7,9 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.sql.*;
+import java.util.Arrays;
+import java.util.List;
+
 import org.json.simple.JSONObject;
 import org.json.simple.JSONArray;
 
@@ -19,6 +22,12 @@ public class MembershipDetail extends HttpServlet {
     private static final String URL = "jdbc:mysql://localhost:3306/gym";
     private static final String USER = "root";
     private static final String PASS = "Ashish_mca@1234";
+    
+    private static final List<String> ALLOWED_ORIGINS = Arrays.asList(
+            "http://localhost:5173",
+            "https://wellness-management-system.vercel.app",
+            "https://admonitorial-cinderella-hungerly.ngrok-free.dev"
+        );
 
     // Helper method to add CORS headers
     private void addCORSHeaders(HttpServletResponse response) {
