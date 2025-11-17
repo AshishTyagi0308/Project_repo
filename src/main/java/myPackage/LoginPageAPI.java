@@ -42,6 +42,15 @@ public class LoginPageAPI extends HttpServlet {
             throws ServletException, IOException {
         setCorsHeaders(response, request, "doPost");
 
+        // Add JDBC driver loading
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+        } catch (ClassNotFoundException e) {
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            response.getWriter().write("{\"error\":\"JDBC Driver not found\"}");
+            return;
+        }
+
         StringBuilder sb = new StringBuilder();
         try (BufferedReader reader = request.getReader()) {
             String line;
