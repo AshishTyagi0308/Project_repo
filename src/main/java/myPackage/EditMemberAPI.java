@@ -16,8 +16,14 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.json.simple.JSONObject;
+
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureException;
+
 
 @WebServlet("/EditMemberAPI")
 public class EditMemberAPI extends HttpServlet {
@@ -42,6 +48,36 @@ public class EditMemberAPI extends HttpServlet {
         response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning");
         response.setHeader("Access-Control-Max-Age", "86400");
     }
+    
+ // JWT validation with error reporting
+    private boolean isTokenValid(String token, HttpServletResponse response) throws IOException {
+        try {
+            Jwts.parser()
+                .setSigningKey("RaJdNoqNevTsnjh9Vgbe/LgPCrbcjwTCfKWpBuOyPTM=".getBytes())
+                .parseClaimsJws(token);
+            return true;
+        } catch (SignatureException e) {
+            sendError(response, "Invalid token signature");
+            return false;
+        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            sendError(response, "Token expired");
+            return false;
+        } catch (Exception e) {
+            sendError(response, "Malformed or invalid token: " + e.getMessage());
+            return false;
+        }
+    }
+
+    // Helper method for sending JSON errors
+    private void sendError(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType("application/json");
+        PrintWriter out = response.getWriter();
+        JSONObject err = new JSONObject();
+        err.put("error", message);
+        out.print(err.toJSONString());
+        out.flush();
+    }
 
     @Override
     protected void doOptions(HttpServletRequest request, HttpServletResponse response)
@@ -56,6 +92,20 @@ public class EditMemberAPI extends HttpServlet {
         addCORSHeaders(request, response);
         response.setContentType("application/json");
         PrintWriter out = response.getWriter();
+        
+     // Authentication: Check Authorization header
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            sendError(response, "Unauthorized: Missing or invalid Authorization header.");
+            return;
+        }
+
+        String token = authHeader.substring(7); // Remove "Bearer " prefix
+
+        if (!isTokenValid(token, response)) {
+            // Error sent inside isTokenValid; return directly
+            return;
+        }
 
         String oldMemberId = request.getParameter("id");
         if (oldMemberId == null || oldMemberId.trim().isEmpty()) {
@@ -94,7 +144,7 @@ public class EditMemberAPI extends HttpServlet {
 
         if (name == null || name.isEmpty() ||
             gender == null || gender.isEmpty() ||
-            photo == null || photo.isEmpty() ||
+            /*photo == null || photo.isEmpty() ||*/
             address == null || address.isEmpty() ||
             phone == null || phone.isEmpty() ||
             dob == null || dob.isEmpty()) {

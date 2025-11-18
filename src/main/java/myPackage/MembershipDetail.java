@@ -11,6 +11,10 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.json.simple.JSONObject;
+
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureException;
+
 import org.json.simple.JSONArray;
 
 @SuppressWarnings("unchecked")
@@ -36,6 +40,36 @@ public class MembershipDetail extends HttpServlet {
         response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning");
         response.setHeader("Access-Control-Max-Age", "864000");
     }
+    
+ // JWT validation with error reporting
+    private boolean isTokenValid(String token, HttpServletResponse response) throws IOException {
+        try {
+            Jwts.parser()
+                .setSigningKey("RaJdNoqNevTsnjh9Vgbe/LgPCrbcjwTCfKWpBuOyPTM=".getBytes())
+                .parseClaimsJws(token);
+            return true;
+        } catch (SignatureException e) {
+            sendError(response, "Invalid token signature");
+            return false;
+        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            sendError(response, "Token expired");
+            return false;
+        } catch (Exception e) {
+            sendError(response, "Malformed or invalid token: " + e.getMessage());
+            return false;
+        }
+    }
+
+    // Helper method for sending JSON errors
+    private void sendError(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType("application/json");
+        PrintWriter out = response.getWriter();
+        JSONObject err = new JSONObject();
+        err.put("error", message);
+        out.print(err.toJSONString());
+        out.flush();
+    }
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
@@ -44,6 +78,20 @@ public class MembershipDetail extends HttpServlet {
         addCORSHeaders(resp);
         resp.setContentType("application/json");
         PrintWriter out = resp.getWriter();
+        
+     // Authentication: Check Authorization header
+        String authHeader = req.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            sendError(resp, "Unauthorized: Missing or invalid Authorization header.");
+            return;
+        }
+
+        String token = authHeader.substring(7); // Remove "Bearer " prefix
+
+        if (!isTokenValid(token, resp)) {
+            // Error sent inside isTokenValid; return directly
+            return;
+        }
         JSONArray membershipArray = new JSONArray();
 
         String memberId = req.getParameter("id");

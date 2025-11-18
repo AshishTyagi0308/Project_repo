@@ -7,7 +7,7 @@ public class InsertDataSQL {
 		// TODO Auto-generated method stub
 		String url = "jdbc:mysql://localhost:3306/gym"; // your DB name
         String user = "root"; // change if needed
-        String pass = "stud102024su"; // change if needed
+        String pass = "Ashish_mca@1234"; // change if needed
 
         
         

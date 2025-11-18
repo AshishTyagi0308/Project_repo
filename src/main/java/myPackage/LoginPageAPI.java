@@ -5,7 +5,9 @@ import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.*;
 import java.io.*;
 import java.sql.*;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 
 // If using org.json.simple, you must also include json-simple-1.1.1.jar
 import org.json.simple.JSONObject;
@@ -19,16 +21,24 @@ public class LoginPageAPI extends HttpServlet {
     private String dbURL = "jdbc:mysql://localhost:3306/gym";
     private String dbUser = "root";
     private String dbPass = "Ashish_mca@1234";
-    private String jwtSecret = "S2rhmJ09N1QfLzq74L0TIjgli8V/0KCE9coNbR7wMbc=";
-
+    private String jwtSecret = "RaJdNoqNevTsnjh9Vgbe/LgPCrbcjwTCfKWpBuOyPTM=";
+    
+    private static final List<String> ALLOWED_ORIGINS = Arrays.asList(
+            "http://localhost:5173",
+            "https://wellness-management-system.vercel.app",
+            "https://admonitorial-cinderella-hungerly.ngrok-free.dev"
+    );
     private void setCorsHeaders(HttpServletResponse response, HttpServletRequest request, String handler) {
-        String allowOrigin = "http://localhost:5173";
-        response.setHeader("Access-Control-Allow-Origin", allowOrigin);
+        String requestOrigin = request.getHeader("Origin");
+        if (requestOrigin != null && ALLOWED_ORIGINS.contains(requestOrigin)) {
+            response.setHeader("Access-Control-Allow-Origin", requestOrigin);
+        }
         response.setHeader("Vary", "Origin");
         response.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
         response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning");
         response.setHeader("Access-Control-Max-Age", "864000");
     }
+
 
     @Override
     protected void doOptions(HttpServletRequest request, HttpServletResponse response)
@@ -93,7 +103,7 @@ public class LoginPageAPI extends HttpServlet {
                                 .claim("email", email)
                                 .setIssuedAt(new Date())
                                 .setExpiration(new Date(System.currentTimeMillis() + 12 * 60 * 60 * 1000))
-                                .signWith(SignatureAlgorithm.HS256, jwtSecret)
+                                .signWith(SignatureAlgorithm.HS256, jwtSecret.getBytes())
                                 .compact();
 
                         response.setContentType("application/json");

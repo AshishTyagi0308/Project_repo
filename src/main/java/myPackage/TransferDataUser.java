@@ -13,33 +13,83 @@ import java.sql.*;
 import java.util.Arrays;
 import java.util.List;
 
+// JWT imports
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureException;
+
 @SuppressWarnings("unchecked")
 @WebServlet("/TransferDataUser")
 public class TransferDataUser extends HttpServlet {
 
     private static final long serialVersionUID = 1L;
-    
     private static final List<String> ALLOWED_ORIGINS = Arrays.asList(
-            "http://localhost:5173",
-            "https://wellness-management-system.vercel.app",
-            "https://admonitorial-cinderella-hungerly.ngrok-free.dev"
-        );
+        "http://localhost:5173",
+        "https://wellness-management-system.vercel.app",
+        "https://admonitorial-cinderella-hungerly.ngrok-free.dev"
+    );
 
     // Add CORS headers helper
-    private void addCORSHeaders(HttpServletResponse response) {
-        response.setHeader("Access-Control-Allow-Origin", "*");
+    private void addCORSHeaders(HttpServletRequest request, HttpServletResponse response) {
+        String origin = request.getHeader("Origin");
+        if (ALLOWED_ORIGINS.contains(origin)) {
+            response.setHeader("Access-Control-Allow-Origin", origin);
+        }
         response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
         response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning");
         response.setHeader("Access-Control-Max-Age", "864000"); // cache preflight for 1 day
-        // Removed Access-Control-Allow-Credentials since wildcard origin is used
     }
 
-    // Handle GET request
+    // JWT validation with error reporting
+    private boolean isTokenValid(String token, HttpServletResponse response) throws IOException {
+        try {
+            Jwts.parser()
+                .setSigningKey("RaJdNoqNevTsnjh9Vgbe/LgPCrbcjwTCfKWpBuOyPTM=".getBytes())
+                .parseClaimsJws(token);
+            return true;
+        } catch (SignatureException e) {
+            sendError(response, "Invalid token signature");
+            return false;
+        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            sendError(response, "Token expired");
+            return false;
+        } catch (Exception e) {
+            sendError(response, "Malformed or invalid token: " + e.getMessage());
+            return false;
+        }
+    }
+
+    // Helper method for sending JSON errors
+    private void sendError(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType("application/json");
+        PrintWriter out = response.getWriter();
+        JSONObject err = new JSONObject();
+        err.put("error", message);
+        out.print(err.toJSONString());
+        out.flush();
+    }
+
+    // Handle GET request with authentication check
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
-        addCORSHeaders(response);
+        addCORSHeaders(request, response);
+
+        // Authentication: Check Authorization header
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            sendError(response, "Unauthorized: Missing or invalid Authorization header.");
+            return;
+        }
+
+        String token = authHeader.substring(7); // Remove "Bearer " prefix
+
+        if (!isTokenValid(token, response)) {
+            // Error sent inside isTokenValid; return directly
+            return;
+        }
+
         response.setContentType("application/json");
         PrintWriter out = response.getWriter();
 
@@ -53,13 +103,11 @@ public class TransferDataUser extends HttpServlet {
             Statement st = con.createStatement();
             ResultSet rs = st.executeQuery("SELECT * FROM user");
 
-            // Debug: check if any row is fetched
             boolean hasData = false;
             while (rs.next()) {
                 hasData = true;
                 JSONObject user = new JSONObject();
 
-                // Use correct case for column names from your DB schema
                 user.put("username", rs.getString("Username"));
                 user.put("password", rs.getString("Password"));
                 user.put("role", rs.getString("Role"));
@@ -68,7 +116,7 @@ public class TransferDataUser extends HttpServlet {
                 usersArray.add(user);
             }
 
-            if(!hasData) {
+            if (!hasData) {
                 System.out.println("No data found in user table.");
             }
 
@@ -77,7 +125,6 @@ public class TransferDataUser extends HttpServlet {
             con.close();
         } catch (Exception e) {
             e.printStackTrace();
-            // Optional: send error response as JSON object
             JSONObject err = new JSONObject();
             err.put("error", e.getMessage());
             out.print(err.toJSONString());
@@ -89,11 +136,11 @@ public class TransferDataUser extends HttpServlet {
         out.flush();
     }
 
-    // Handle OPTIONS request (for CORS preflight)
+    // Handle OPTIONS request for CORS preflight
     @Override
     protected void doOptions(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        addCORSHeaders(response);
+        addCORSHeaders(request, response);
         response.setStatus(HttpServletResponse.SC_OK);
     }
 }

@@ -1,24 +1,30 @@
 package myPackage;
-import org.json.simple.JSONObject;
-
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureException;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.util.Arrays;
+import java.util.List;
+
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.sql.*;
-import java.util.Arrays;
-import java.util.List;
-@SuppressWarnings("unchecked")
-@WebServlet("/MemberDetail/*")
-public class MemberDetail extends HttpServlet {
+
+import org.json.simple.JSONObject;
+
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureException;
+
+@WebServlet("/DeleteUserAPI")
+public class DeleteUserAPI extends HttpServlet {
     private static final long serialVersionUID = 1L;
 
+    // MySQL connection details
     private static final String URL = "jdbc:mysql://localhost:3306/gym";
     private static final String USER = "root";
     private static final String PASS = "Ashish_mca@1234";
@@ -28,22 +34,22 @@ public class MemberDetail extends HttpServlet {
         "https://wellness-management-system.vercel.app",
         "https://admonitorial-cinderella-hungerly.ngrok-free.dev"
     );
-
-    private void addCORSHeaders(HttpServletResponse response, HttpServletRequest request) {
+    
+    private void setCorsHeaders(HttpServletResponse response, HttpServletRequest request) {
         String origin = request.getHeader("Origin");
         if (origin != null && ALLOWED_ORIGINS.contains(origin)) {
             response.setHeader("Access-Control-Allow-Origin", origin);
             response.setHeader("Vary", "Origin");
             response.setHeader("Access-Control-Allow-Credentials", "true");
         }
-        response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        response.setHeader("Access-Control-Allow-Methods", "DELETE, OPTIONS");
         String reqHeaders = request.getHeader("Access-Control-Request-Headers");
         if (reqHeaders != null) {
             response.setHeader("Access-Control-Allow-Headers", reqHeaders);
         } else {
             response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning");
         }
-        response.setHeader("Access-Control-Max-Age", "864000");
+        response.setHeader("Access-Control-Max-Age", "86400");
     }
     
  // JWT validation with error reporting
@@ -75,33 +81,17 @@ public class MemberDetail extends HttpServlet {
         out.print(err.toJSONString());
         out.flush();
     }
-
+    
     @Override
     protected void doOptions(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        addCORSHeaders(response, request);
+        setCorsHeaders(response, request);
         response.setStatus(HttpServletResponse.SC_OK);
     }
 
-    private Integer getMemberId(HttpServletRequest request) {
-        String idParam = request.getParameter("id");
-        if (idParam != null) {
-            try { return Integer.parseInt(idParam); }
-            catch (NumberFormatException e) { return null; }
-        }
-        String pathInfo = request.getPathInfo();
-        if (pathInfo != null && pathInfo.length() > 1) {
-            try { return Integer.parseInt(pathInfo.substring(1)); }
-            catch (NumberFormatException e) { return null; }
-        }
-        return null;
-    }
-
     @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
-        addCORSHeaders(response, request);
-        response.setContentType("application/json");
-        PrintWriter out = response.getWriter();
+    protected void doDelete(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        setCorsHeaders(response, request);
+        response.setContentType("text/plain");
         
      // Authentication: Check Authorization header
         String authHeader = request.getHeader("Authorization");
@@ -117,36 +107,44 @@ public class MemberDetail extends HttpServlet {
             return;
         }
 
-        Integer memberId = getMemberId(request);
-        if (memberId == null) {
-            out.println("{\"error\":\"Invalid or missing member ID.\"}");
+        String username = request.getParameter("username");
+        if (username == null || username.trim().isEmpty()) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            response.getWriter().write("Username is required");
             return;
         }
 
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
-            Connection con = DriverManager.getConnection(URL, USER, PASS);
-
-            String sql = "SELECT * FROM member WHERE Member_ID = ?";
-            PreparedStatement ps = con.prepareStatement(sql);
-            ps.setInt(1, memberId);
-            ResultSet rs = ps.executeQuery();
-
-            if (rs.next()) {
-                JSONObject member = new JSONObject();
-                member.put("name", rs.getString("Name"));
-                member.put("gender", rs.getString("Gender"));
-                member.put("dob", rs.getString("DOB"));
-                member.put("phone", rs.getString("Phone_no"));
-                member.put("address", rs.getString("Address"));
-                out.println(member.toJSONString());
-            } else {
-                out.println("{\"message\":\"Member not found.\"}");
+            try (Connection conn = DriverManager.getConnection(URL, USER, PASS)) {
+                String selectSql = "SELECT * FROM user WHERE Username = ?";
+                try (PreparedStatement selectStmt = conn.prepareStatement(selectSql)) {
+                    selectStmt.setString(1, username);
+                    try (ResultSet rs = selectStmt.executeQuery()) {
+                        if (!rs.next()) {
+                            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                            response.getWriter().write("User not found");
+                            return;
+                        }
+                    }
+                }
+                String deleteSql = "DELETE FROM user WHERE Username = ?";
+                try (PreparedStatement deleteStmt = conn.prepareStatement(deleteSql)) {
+                    deleteStmt.setString(1, username);
+                    int affected = deleteStmt.executeUpdate();
+                    if (affected > 0) {
+                        response.setStatus(HttpServletResponse.SC_OK);
+                        response.getWriter().write("User deleted successfully");
+                    } else {
+                        response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+                        response.getWriter().write("Failed to delete user");
+                    }
+                }
             }
-            con.close();
         } catch (Exception e) {
-            addCORSHeaders(response, request);
-            out.println("{\"error\":\"" + e.getMessage() + "\"}");
+            setCorsHeaders(response, request);
+            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            response.getWriter().write("Error: " + e.getMessage());
         }
     }
 }
