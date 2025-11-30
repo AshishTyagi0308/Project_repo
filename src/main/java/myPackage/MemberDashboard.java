@@ -135,7 +135,7 @@ public class MemberDashboard extends HttpServlet {
                 if (rs.getString("Membership_ID") == null) {
                     obj.put("payment_status", "-"); // no membership, status is null
                 } else {
-                    obj.put("payment_status", total == paid ? "paid" : "pending");
+                    obj.put("payment_status", total == paid ? "Paid" : "Pending");
                 }
                 resultList.add(obj);
             }

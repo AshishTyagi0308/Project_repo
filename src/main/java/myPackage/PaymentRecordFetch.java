@@ -5,8 +5,6 @@ import javax.servlet.*;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.*;
 import java.sql.*;
-import java.util.Arrays;
-import java.util.List;
 
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -20,33 +18,8 @@ public class PaymentRecordFetch extends HttpServlet {
     private static final String URL = "jdbc:mysql://localhost:3306/gym";
     private static final String USER = "root";
     private static final String PASS = "Ashish_mca@1234";
-    
-    // List of allowed origins for CORS
-    private static final List<String> ALLOWED_ORIGINS = Arrays.asList(
-            "http://localhost:5173",
-            "https://wellness-management-system.vercel.app",
-            "https://admonitorial-cinderella-hungerly.ngrok-free.dev"
-        );
 
-    // Method to add CORS headers dynamically based on request Origin
-    private void addCORSHeaders(HttpServletRequest request, HttpServletResponse response) {
-        String origin = request.getHeader("Origin");
-
-        // Check if the Origin header is in the allowed origins list
-        if (origin != null && ALLOWED_ORIGINS.contains(origin)) {
-            // Echo back the allowed origin to enable CORS
-            response.setHeader("Access-Control-Allow-Origin", origin);
-        }
-
-        // Specify allowed HTTP methods
-        response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-        // Specify allowed headers clients can use in requests
-        response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning");
-        // Set max age for preflight requests caching
-        response.setHeader("Access-Control-Max-Age", "86400");
-    }
-    
- // JWT validation with error reporting
+    // JWT validation with error reporting
     private boolean isTokenValid(String token, HttpServletResponse response) throws IOException {
         try {
             Jwts.parser()
@@ -76,25 +49,15 @@ public class PaymentRecordFetch extends HttpServlet {
         out.flush();
     }
 
-    // Handle CORS preflight requests (OPTIONS)
-    @Override
-    protected void doOptions(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
-        addCORSHeaders(request, response);  // Set CORS headers dynamically
-        response.setStatus(HttpServletResponse.SC_OK);
-    }
-
     // Handle GET request to fetch payment records
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
 
-        addCORSHeaders(req, resp); // Add CORS headers in actual request as well
-
         resp.setContentType("application/json");
         PrintWriter out = resp.getWriter();
-        
-     // Authentication: Check Authorization header
+
+        // Authentication: Check Authorization header
         String authHeader = req.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             sendError(resp, "Unauthorized: Missing or invalid Authorization header.");
@@ -125,7 +88,7 @@ public class PaymentRecordFetch extends HttpServlet {
             Class.forName("com.mysql.cj.jdbc.Driver");
             con = DriverManager.getConnection(URL, USER, PASS);
 
-            String query = "SELECT Payment_ID, Pay_date, Paid_fee, Pay_mode, due_date "
+            String query = "SELECT Payment_ID, Pay_date, Paid_fee, Pay_mode, Due_date "
                          + "FROM payment WHERE Membership_ID=?";
 
             ps = con.prepareStatement(query);
@@ -140,7 +103,13 @@ public class PaymentRecordFetch extends HttpServlet {
                 obj.put("pay_date", rs.getString("Pay_date"));
                 obj.put("amount", rs.getDouble("Paid_fee"));
                 obj.put("mode", rs.getString("Pay_mode"));
-                obj.put("due_date", rs.getString("due_date"));   // Corrected key casing
+
+                String dueDate = rs.getString("Due_date");
+                if (dueDate == null || dueDate.trim().isEmpty()) {
+                    dueDate = "-";
+                }
+                obj.put("due_date", dueDate);
+
                 arr.add(obj);
             }
 

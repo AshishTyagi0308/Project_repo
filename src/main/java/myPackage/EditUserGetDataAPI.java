@@ -25,26 +25,6 @@ public class EditUserGetDataAPI extends HttpServlet {
     private static final String DB_USER = "root";
     private static final String DB_PASSWORD = "Ashish_mca@1234";
     
-    // List all allowed origins, add new ones as needed for production
-    private static final List<String> ALLOWED_ORIGINS = Arrays.asList(
-        "http://localhost:5173",
-        "https://wellness-management-system.vercel.app",
-        "https://admonitorial-cinderella-hungerly.ngrok-free.dev"
-    );
-
-    // Improved CORS handler
-    private void addCorsHeaders(HttpServletRequest request, HttpServletResponse response) {
-        String origin = request.getHeader("Origin");
-        if (origin != null && ALLOWED_ORIGINS.contains(origin)) {
-            response.setHeader("Access-Control-Allow-Origin", origin);
-            response.setHeader("Vary", "Origin"); // For caching proxies
-            response.setHeader("Access-Control-Allow-Credentials", "true");
-        }
-        response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
-        response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, ngrok-skip-browser-warning");
-        response.setHeader("Access-Control-Max-Age", "86400");
-    }
-    
  // JWT validation with error reporting
     private boolean isTokenValid(String token, HttpServletResponse response) throws IOException {
         try {
@@ -76,16 +56,8 @@ public class EditUserGetDataAPI extends HttpServlet {
     }
 
     @Override
-    protected void doOptions(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
-        addCorsHeaders(request, response);
-        response.setStatus(HttpServletResponse.SC_OK);
-    }
-
-    @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        addCorsHeaders(request, response); // Always call this first
 
         response.setContentType("application/json");
         PrintWriter out = response.getWriter();

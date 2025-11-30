@@ -14,6 +14,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.sql.*;
 import java.util.Arrays;
 import java.util.List;
+
 @SuppressWarnings("unchecked")
 @WebServlet("/MemberDetail/*")
 public class MemberDetail extends HttpServlet {
@@ -45,28 +46,29 @@ public class MemberDetail extends HttpServlet {
         }
         response.setHeader("Access-Control-Max-Age", "864000");
     }
-    
- // JWT validation with error reporting
-    private boolean isTokenValid(String token, HttpServletResponse response) throws IOException {
+
+    // JWT validation with error reporting
+    private boolean isTokenValid(String token, HttpServletResponse response, HttpServletRequest request) throws IOException {
         try {
             Jwts.parser()
                 .setSigningKey("RaJdNoqNevTsnjh9Vgbe/LgPCrbcjwTCfKWpBuOyPTM=".getBytes())
                 .parseClaimsJws(token);
             return true;
         } catch (SignatureException e) {
-            sendError(response, "Invalid token signature");
+            sendError(response, request, "Invalid token signature");
             return false;
         } catch (io.jsonwebtoken.ExpiredJwtException e) {
-            sendError(response, "Token expired");
+            sendError(response, request, "Token expired");
             return false;
         } catch (Exception e) {
-            sendError(response, "Malformed or invalid token: " + e.getMessage());
+            sendError(response, request, "Malformed or invalid token: " + e.getMessage());
             return false;
         }
     }
 
-    // Helper method for sending JSON errors
-    private void sendError(HttpServletResponse response, String message) throws IOException {
+    // Helper method for sending JSON errors with CORS headers
+    private void sendError(HttpServletResponse response, HttpServletRequest request, String message) throws IOException {
+        addCORSHeaders(response, request);
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType("application/json");
         PrintWriter out = response.getWriter();
@@ -99,20 +101,20 @@ public class MemberDetail extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        addCORSHeaders(response, request);
+        addCORSHeaders(response, request);  // Always set CORS headers!
         response.setContentType("application/json");
         PrintWriter out = response.getWriter();
-        
-     // Authentication: Check Authorization header
+
+        // Authentication: Check Authorization header
         String authHeader = request.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            sendError(response, "Unauthorized: Missing or invalid Authorization header.");
+            sendError(response, request, "Unauthorized: Missing or invalid Authorization header.");
             return;
         }
 
         String token = authHeader.substring(7); // Remove "Bearer " prefix
 
-        if (!isTokenValid(token, response)) {
+        if (!isTokenValid(token, response, request)) {
             // Error sent inside isTokenValid; return directly
             return;
         }
@@ -145,7 +147,7 @@ public class MemberDetail extends HttpServlet {
             }
             con.close();
         } catch (Exception e) {
-            addCORSHeaders(response, request);
+            addCORSHeaders(response, request); // Add CORS for error response, if not already added
             out.println("{\"error\":\"" + e.getMessage() + "\"}");
         }
     }

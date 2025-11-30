@@ -33,22 +33,7 @@ public class EditMemberAPI extends HttpServlet {
     private static final String DB_USER = "root";
     private static final String DB_PASSWORD = "Ashish_mca@1234";
 
-    private static final List<String> ALLOWED_ORIGINS = Arrays.asList(
-            "http://localhost:5173",
-            "https://wellness-management-system.vercel.app",
-            "https://admonitorial-cinderella-hungerly.ngrok-free.dev"
-    );
-
-    private void addCORSHeaders(HttpServletRequest request, HttpServletResponse response) {
-        String origin = request.getHeader("Origin");
-        if (origin != null && ALLOWED_ORIGINS.contains(origin)) {
-            response.setHeader("Access-Control-Allow-Origin", origin);
-        }
-        response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-        response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning");
-        response.setHeader("Access-Control-Max-Age", "86400");
-    }
-    
+        
  // JWT validation with error reporting
     private boolean isTokenValid(String token, HttpServletResponse response) throws IOException {
         try {
@@ -82,15 +67,13 @@ public class EditMemberAPI extends HttpServlet {
     @Override
     protected void doOptions(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        addCORSHeaders(request, response);
         response.setStatus(HttpServletResponse.SC_OK);
     }
 
     @Override
     protected void doPut(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        addCORSHeaders(request, response);
-        response.setContentType("application/json");
+           response.setContentType("application/json");
         PrintWriter out = response.getWriter();
         
      // Authentication: Check Authorization header
@@ -191,13 +174,5 @@ public class EditMemberAPI extends HttpServlet {
                 if (conn != null) conn.close();
             } catch (SQLException ignored) {}
         }
-    }
-
-    // Optional: keep doPost if needed; redirect to doPut or respond method not allowed
-    @Override
-    protected void doPost(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
-        response.setStatus(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
-        response.getWriter().print("{\"error\":\"POST not supported, use PUT to edit member\"}");
     }
 }

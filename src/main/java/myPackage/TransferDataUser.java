@@ -10,8 +10,6 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.sql.*;
-import java.util.Arrays;
-import java.util.List;
 
 // JWT imports
 import io.jsonwebtoken.Jwts;
@@ -22,22 +20,9 @@ import io.jsonwebtoken.SignatureException;
 public class TransferDataUser extends HttpServlet {
 
     private static final long serialVersionUID = 1L;
-    private static final List<String> ALLOWED_ORIGINS = Arrays.asList(
-        "http://localhost:5173",
-        "https://wellness-management-system.vercel.app",
-        "https://admonitorial-cinderella-hungerly.ngrok-free.dev"
-    );
 
-    // Add CORS headers helper
-    private void addCORSHeaders(HttpServletRequest request, HttpServletResponse response) {
-        String origin = request.getHeader("Origin");
-        if (ALLOWED_ORIGINS.contains(origin)) {
-            response.setHeader("Access-Control-Allow-Origin", origin);
-        }
-        response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-        response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning");
-        response.setHeader("Access-Control-Max-Age", "864000"); // cache preflight for 1 day
-    }
+    // REMOVED: ALLOWED_ORIGINS and addCORSHeaders logic.
+    // All CORS logic now moved to CORSFilter.
 
     // JWT validation with error reporting
     private boolean isTokenValid(String token, HttpServletResponse response) throws IOException {
@@ -74,7 +59,7 @@ public class TransferDataUser extends HttpServlet {
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
 
-        addCORSHeaders(request, response);
+        // REMOVED: addCORSHeaders(request, response);  (Filter handles CORS)
 
         // Authentication: Check Authorization header
         String authHeader = request.getHeader("Authorization");
@@ -136,11 +121,5 @@ public class TransferDataUser extends HttpServlet {
         out.flush();
     }
 
-    // Handle OPTIONS request for CORS preflight
-    @Override
-    protected void doOptions(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
-        addCORSHeaders(request, response);
-        response.setStatus(HttpServletResponse.SC_OK);
-    }
+    // REMOVED: doOptions override for CORS (now handled by filter)
 }

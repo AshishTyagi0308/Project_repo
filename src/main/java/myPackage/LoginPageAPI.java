@@ -22,16 +22,23 @@ public class LoginPageAPI extends HttpServlet {
     private String dbUser = "root";
     private String dbPass = "Ashish_mca@1234";
     private String jwtSecret = "RaJdNoqNevTsnjh9Vgbe/LgPCrbcjwTCfKWpBuOyPTM=";
-    
+
+    // Allowed origins
     private static final List<String> ALLOWED_ORIGINS = Arrays.asList(
-            "http://localhost:5173",
-            "https://wellness-management-system.vercel.app",
-            "https://admonitorial-cinderella-hungerly.ngrok-free.dev"
+        "http://localhost:5173",
+        "https://wellness-management-system.vercel.app",
+        "https://admonitorial-cinderella-hungerly.ngrok-free.dev"
     );
-    private void setCorsHeaders(HttpServletResponse response, HttpServletRequest request, String handler) {
+
+    // Centralized CORS logic
+    private void setCorsHeaders(HttpServletResponse response, HttpServletRequest request) {
         String requestOrigin = request.getHeader("Origin");
         if (requestOrigin != null && ALLOWED_ORIGINS.contains(requestOrigin)) {
             response.setHeader("Access-Control-Allow-Origin", requestOrigin);
+            response.setHeader("Access-Control-Allow-Credentials", "true"); // Enable credentials support
+        } else {
+            // CORS fallback if no allowed origin detected
+            response.setHeader("Access-Control-Allow-Origin", "null");
         }
         response.setHeader("Vary", "Origin");
         response.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
@@ -39,20 +46,19 @@ public class LoginPageAPI extends HttpServlet {
         response.setHeader("Access-Control-Max-Age", "864000");
     }
 
-
     @Override
     protected void doOptions(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        setCorsHeaders(response, request, "doOptions");
+        setCorsHeaders(response, request);
         response.setStatus(HttpServletResponse.SC_OK);
     }
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        setCorsHeaders(response, request, "doPost");
+        setCorsHeaders(response, request);
 
-        // Add JDBC driver loading
+        // Load JDBC driver
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
         } catch (ClassNotFoundException e) {
@@ -61,6 +67,7 @@ public class LoginPageAPI extends HttpServlet {
             return;
         }
 
+        // Read JSON body
         StringBuilder sb = new StringBuilder();
         try (BufferedReader reader = request.getReader()) {
             String line;
@@ -123,5 +130,14 @@ public class LoginPageAPI extends HttpServlet {
             response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             response.getWriter().write("{\"error\":\"Server error\"}");
         }
+    }
+
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        // If you expose GET, also set CORS headers here
+        setCorsHeaders(response, request);
+        response.setStatus(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+        response.getWriter().write("{\"error\":\"GET not allowed\"}");
     }
 }

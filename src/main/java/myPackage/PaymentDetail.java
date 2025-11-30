@@ -5,8 +5,6 @@ import javax.servlet.*;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.*;
 import java.sql.*;
-import java.util.Arrays;
-import java.util.List;
 import org.json.simple.JSONObject;
 
 import io.jsonwebtoken.Jwts;
@@ -15,21 +13,11 @@ import io.jsonwebtoken.SignatureException;
 @WebServlet("/PaymentDetail")
 public class PaymentDetail extends HttpServlet {
 
-    private static final List<String> ALLOWED_ORIGINS = Arrays.asList(
-        "http://localhost:5173",
-        "https://wellness-management-system.vercel.app",
-        "https://admonitorial-cinderella-hungerly.ngrok-free.dev"
-    );
+    private static final String URL  = "jdbc:mysql://localhost:3306/gym";
+    private static final String USER = "root";
+    private static final String PASS = "Ashish_mca@1234";
 
-    // Sets CORS headers (simple: use "*" for dev, customize for production security)
-    private void addCORSHeaders(HttpServletResponse response) {
-        response.setHeader("Access-Control-Allow-Origin", "*"); // For dev, use allowed origins in prod
-        response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-        response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning");
-        response.setHeader("Access-Control-Max-Age", "86400");
-    }
-    
- // JWT validation with error reporting
+    // JWT validation with error reporting
     private boolean isTokenValid(String token, HttpServletResponse response) throws IOException {
         try {
             Jwts.parser()
@@ -59,38 +47,21 @@ public class PaymentDetail extends HttpServlet {
         out.flush();
     }
 
-    // Handle CORS preflight
-    @Override
-    protected void doOptions(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
-        addCORSHeaders(response);  // <- Set CORS here!
-        response.setStatus(HttpServletResponse.SC_OK);
-    }
-
-    private static final String URL = "jdbc:mysql://localhost:3306/gym";
-    private static final String USER = "root";
-    private static final String PASS = "Ashish_mca@1234";
-
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
 
-        addCORSHeaders(resp); // <- Set CORS here too!
-
         resp.setContentType("application/json");
         PrintWriter out = resp.getWriter();
-        
-     // Authentication: Check Authorization header
+
+        // Authentication
         String authHeader = req.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             sendError(resp, "Unauthorized: Missing or invalid Authorization header.");
             return;
         }
-
-        String token = authHeader.substring(7); // Remove "Bearer " prefix
-
+        String token = authHeader.substring(7);
         if (!isTokenValid(token, resp)) {
-            // Error sent inside isTokenValid; return directly
             return;
         }
 
@@ -104,14 +75,14 @@ public class PaymentDetail extends HttpServlet {
         }
 
         Connection con = null;
-        PreparedStatement ps1 = null, ps2 = null;
-        ResultSet rs1 = null, rs2 = null;
+        PreparedStatement ps1 = null, ps2 = null, ps3 = null;
+        ResultSet rs1 = null, rs2 = null, rs3 = null;
 
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
             con = DriverManager.getConnection(URL, USER, PASS);
 
-            // 1️⃣ Get total fee from membership table
+            // 1) Get total fee from membership table
             String q1 = "SELECT Total_fee FROM membership WHERE Membership_ID=?";
             ps1 = con.prepareStatement(q1);
             ps1.setString(1, membershipId);
@@ -126,25 +97,44 @@ public class PaymentDetail extends HttpServlet {
                 return;
             }
 
-            // 2️⃣ Get paid and due date
-            String q2 = "SELECT SUM(Paid_fee) AS paidFee, MAX(Due_date) AS Due_date FROM payment WHERE Membership_ID=?";
+            // 2) Get total paid fee
+            String q2 = "SELECT SUM(Paid_fee) AS paidFee FROM payment WHERE Membership_ID=?";
             ps2 = con.prepareStatement(q2);
             ps2.setString(1, membershipId);
             rs2 = ps2.executeQuery();
 
             double paidFee = 0;
-            String dueDate = null;
             if (rs2.next()) {
                 paidFee = rs2.getDouble("paidFee");
-                dueDate = rs2.getString("Due_date");
             }
 
-            // 3️⃣ Pending fee calculation
+            // 3) Get Due_date of the latest payment row
+            //    "latest" defined by Pay_date, and then Payment_ID as tiebreaker
+            String q3 = "SELECT Due_date " +
+                        "FROM payment " +
+                        "WHERE Membership_ID=? " +
+                        "ORDER BY Pay_date DESC, Payment_ID DESC " +
+                        "LIMIT 1";
+            ps3 = con.prepareStatement(q3);
+            ps3.setString(1, membershipId);
+            rs3 = ps3.executeQuery();
+
+            String dueDate = null;
+            if (rs3.next()) {
+                dueDate = rs3.getString("Due_date");
+            }
+
+            // If latest row has no due date, show "-"
+            if (dueDate == null || dueDate.trim().isEmpty()) {
+                dueDate = "-";
+            }
+
+            // 4) Pending fee calculation
             double pendingFee = totalFee - paidFee;
             if (pendingFee < 0) pendingFee = 0;
             String status = (pendingFee == 0) ? "Paid" : "Pending";
 
-            // 4️⃣ Respond as JSON
+            // 5) Respond as JSON
             json.put("membership_id", membershipId);
             json.put("total_fee", totalFee);
             json.put("paid_fee", paidFee);
@@ -153,6 +143,7 @@ public class PaymentDetail extends HttpServlet {
             json.put("due_date", dueDate);
 
             out.print(json.toString());
+
         } catch (Exception e) {
             e.printStackTrace();
             json.put("error", e.getMessage());
@@ -160,8 +151,10 @@ public class PaymentDetail extends HttpServlet {
         } finally {
             try { if (rs1 != null) rs1.close(); } catch (Exception ignored) {}
             try { if (rs2 != null) rs2.close(); } catch (Exception ignored) {}
+            try { if (rs3 != null) rs3.close(); } catch (Exception ignored) {}
             try { if (ps1 != null) ps1.close(); } catch (Exception ignored) {}
             try { if (ps2 != null) ps2.close(); } catch (Exception ignored) {}
+            try { if (ps3 != null) ps3.close(); } catch (Exception ignored) {}
             try { if (con != null) con.close(); } catch (Exception ignored) {}
         }
     }
