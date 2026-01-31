@@ -6,6 +6,7 @@ import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.SQLException;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -22,139 +23,168 @@ import io.jsonwebtoken.SignatureException;
 @WebServlet("/EditWorkoutAPI")
 public class EditWorkoutAPI extends HttpServlet {
 
-    private static final String DB_URL = "jdbc:mysql://localhost:3306/gym";
+    private static final long serialVersionUID = 1L;
+
+    private static final String DB_URL  = "jdbc:mysql://localhost:3306/gym";
     private static final String DB_USER = "root";
     private static final String DB_PASS = "Ashish_mca@1234";
 
-    // JWT validation with error reporting
-    private boolean isTokenValid(String token, HttpServletResponse response) throws IOException {
+    private boolean isTokenValid(String token,
+                                 HttpServletResponse response,
+                                 HttpServletRequest request) throws IOException {
         try {
             Jwts.parser()
                 .setSigningKey("RaJdNoqNevTsnjh9Vgbe/LgPCrbcjwTCfKWpBuOyPTM=".getBytes())
                 .parseClaimsJws(token);
             return true;
         } catch (SignatureException e) {
-            sendError(response, "Invalid token signature");
+            sendJson(response, 401, false, "Invalid token signature");
             return false;
         } catch (io.jsonwebtoken.ExpiredJwtException e) {
-            sendError(response, "Token expired");
+            sendJson(response, 401, false, "Token expired");
             return false;
         } catch (Exception e) {
-            sendError(response, "Malformed or invalid token: " + e.getMessage());
+            sendJson(response, 401, false, "Malformed or invalid token: " + e.getMessage());
             return false;
         }
     }
 
-    // Helper method for sending JSON errors
-    private void sendError(HttpServletResponse response, String message) throws IOException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.setContentType("application/json");
-        PrintWriter out = response.getWriter();
-        JSONObject err = new JSONObject();
-        err.put("error", message);
-        out.print(err.toJSONString());
-        out.flush();
+    // Optional fields can be null
+    private String normalize(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return null;
+        }
+        return value.trim();
     }
 
-    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    private void sendJson(HttpServletResponse response,
+                          int statusCode,
+                          boolean success,
+                          String message) throws IOException {
+        response.setStatus(statusCode);
+        response.setContentType("application/json");
+        JSONObject obj = new JSONObject();
+        obj.put("success", success);
+        obj.put("message", message);
+        response.getWriter().write(obj.toJSONString());
+    }
+
+    @Override
+    protected void doPut(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        doPost(request, response);
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest request,
+                          HttpServletResponse response) throws ServletException, IOException {
+
         response.setContentType("application/json");
 
         String authHeader = request.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            sendError(response, "Unauthorized: Missing or invalid Authorization header.");
-            return;
-        }
-        String token = authHeader.substring(7); // Remove "Bearer " prefix
-        if (!isTokenValid(token, response)) {
+            sendJson(response, 401, false, "Unauthorized: Missing or invalid Authorization header");
             return;
         }
 
-        // Get member ID from URL param
-        String memberId = request.getParameter("id");
-
-        JSONObject jsonResponse = new JSONObject();
-        if (memberId == null) {
-            jsonResponse.put("status", "error");
-            jsonResponse.put("message", "Member ID (id) is required as a request parameter.");
-            response.getWriter().print(jsonResponse.toString());
+        String token = authHeader.substring(7);
+        if (!isTokenValid(token, response, request)) {
             return;
         }
 
-        // Parse the JSON body (rest of workout details)
+        String idParam = request.getParameter("id");
+        if (idParam == null || idParam.trim().isEmpty()) {
+            sendJson(response, 400, false, "Missing id parameter");
+            return;
+        }
+
+        // BODY READER
         StringBuilder sb = new StringBuilder();
-        BufferedReader reader = request.getReader();
-        String line;
-        while ((line = reader.readLine()) != null) {
-            sb.append(line);
+        try (BufferedReader reader = request.getReader()) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line);
+            }
         }
+
+        if (sb.length() == 0) {
+            sendJson(response, 400, false, "Empty JSON body");
+            return;
+        }
+
+        String fromDate, toDate;
+        String monday, tuesday, wednesday, thursday, friday, saturday, sunday;
 
         try {
             JSONParser parser = new JSONParser();
             JSONObject body = (JSONObject) parser.parse(sb.toString());
 
-            // Fetch values from JSON
-            String fromDate = (String) body.get("start_date");
-            String toDate = (String) body.get("end_date");
-            String monday = (String) body.get("monday");
-            String tuesday = (String) body.get("tuesday");
-            String wednesday = (String) body.get("wednesday");
-            String thursday = (String) body.get("thursday");
-            String friday = (String) body.get("friday");
-            String saturday = (String) body.get("saturday");
-            String sunday = (String) body.get("sunday");
+            fromDate = (String) body.get("start_date");
+            toDate   = (String) body.get("end_date");
 
-            if (fromDate == null || toDate == null) {
-                jsonResponse.put("status", "error");
-                jsonResponse.put("message", "Required fields (fromDate, toDate) are missing");
-                response.getWriter().print(jsonResponse.toString());
+            // ❗ FINAL FIX — DATE REQUIRED CHECK (now works correctly)
+            if (fromDate == null || fromDate.trim().isEmpty() ||
+                toDate == null || toDate.trim().isEmpty()) {
+
+                sendJson(response, 400, false, "Dates are required");
                 return;
             }
 
-            Connection conn = null;
-            PreparedStatement pstmt = null;
-            try {
-                Class.forName("com.mysql.cj.jdbc.Driver");
-                conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+            // Optional fields
+            monday    = normalize((String) body.get("monday"));
+            tuesday   = normalize((String) body.get("tuesday"));
+            wednesday = normalize((String) body.get("wednesday"));
+            thursday  = normalize((String) body.get("thursday"));
+            friday    = normalize((String) body.get("friday"));
+            saturday  = normalize((String) body.get("saturday"));
+            sunday    = normalize((String) body.get("sunday"));
 
-                String sql = "UPDATE workout_chart SET Start_date = ?, End_date = ?, Monday = ?, Tuesday = ?, Wednesday = ?, " +
-                             "Thursday = ?, Friday = ?, Saturday = ?, Sunday = ? WHERE Wk_ID = ?";
+        } catch (Exception e) {
+            sendJson(response, 400, false, "JSON parse error: " + e.getMessage());
+            return;
+        }
 
-                pstmt = conn.prepareStatement(sql);
-                pstmt.setString(1, fromDate);
-                pstmt.setString(2, toDate);
-                pstmt.setString(3, monday);
-                pstmt.setString(4, tuesday);
-                pstmt.setString(5, wednesday);
-                pstmt.setString(6, thursday);
-                pstmt.setString(7, friday);
-                pstmt.setString(8, saturday);
-                pstmt.setString(9, sunday);
-                pstmt.setString(10, memberId);
+        String sql =
+            "UPDATE workout_chart SET " +
+            "Start_date = ?, End_date = ?, " +
+            "Monday = ?, Tuesday = ?, Wednesday = ?, Thursday = ?, " +
+            "Friday = ?, Saturday = ?, Sunday = ? " +
+            "WHERE Wk_ID = ?";
 
-                int rows = pstmt.executeUpdate();
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
 
-                if (rows > 0) {
-                    jsonResponse.put("status", "success");
-                    jsonResponse.put("message", "Workout plan updated successfully");
+            try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+
+                // REQUIRED FIELDS
+                ps.setString(1, fromDate);
+                ps.setString(2, toDate);
+
+                // OPTIONAL FIELDS (can be null)
+                ps.setString(3, monday);
+                ps.setString(4, tuesday);
+                ps.setString(5, wednesday);
+                ps.setString(6, thursday);
+                ps.setString(7, friday);
+                ps.setString(8, saturday);
+                ps.setString(9, sunday);
+
+                ps.setString(10, idParam);
+
+                int rows = ps.executeUpdate();
+
+                if (rows == 0) {
+                    sendJson(response, 404, false, "No workout plan found for given id");
                 } else {
-                    jsonResponse.put("status", "error");
-                    jsonResponse.put("message", "No workout plan found to update for the given member");
-                }
-            } catch (Exception e) {
-                jsonResponse.put("status", "error");
-                jsonResponse.put("message", "Error: " + e.getMessage());
-            } finally {
-                try {
-                    if (pstmt != null) pstmt.close();
-                    if (conn != null) conn.close();
-                } catch (Exception e) {
-                    // Ignore
+                    sendJson(response, 200, true, "Workout plan updated successfully");
                 }
             }
-        } catch (Exception e) {
-            jsonResponse.put("status", "error");
-            jsonResponse.put("message", "JSON Parse Error: " + e.getMessage());
+
+        } catch (SQLException e) {
+            sendJson(response, 500, false, "Database error: " + e.getMessage());
+        } catch (ClassNotFoundException e) {
+            sendJson(response, 500, false, "JDBC driver not found");
         }
-        response.getWriter().print(jsonResponse.toString());
     }
 }

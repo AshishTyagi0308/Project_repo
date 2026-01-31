@@ -22,11 +22,13 @@ public class EditGetHealthAPI extends HttpServlet {
     private static final String USER = "root";
     private static final String PASS = "Ashish_mca@1234";
 
+    @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
         handleGetHealth(req, resp);
     }
 
+    @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
         handleGetHealth(req, resp);
@@ -65,15 +67,15 @@ public class EditGetHealthAPI extends HttpServlet {
             if (rs.next()) {
                 obj.put("status", "success");
                 obj.put("member_id", member_id);
-                obj.put("medical_history", rs.getString("Medical_history"));
-                obj.put("current_medication", rs.getString("Curr_Medication"));
-                obj.put("allergy", rs.getString("Allergy"));
-                obj.put("surgery", rs.getString("Surgery"));
-                obj.put("injury", rs.getString("Injury"));
-                obj.put("supplement", rs.getString("Supplement"));
-                obj.put("diet_preference", rs.getString("Diet_Preference"));
-                obj.put("drink", rs.getString("Drink"));
-                obj.put("smoke", rs.getString("Smoke"));
+                obj.put("medical_history",     valueOrDash(rs.getString("Medical_history")));
+                obj.put("current_medication",  valueOrDash(rs.getString("Curr_Medication")));
+                obj.put("allergy",             valueOrDash(rs.getString("Allergy")));
+                obj.put("surgery",             valueOrDash(rs.getString("Surgery")));
+                obj.put("injury",              valueOrDash(rs.getString("Injury")));
+                obj.put("supplement",          valueOrDash(rs.getString("Supplement")));
+                obj.put("diet_preference",     valueOrDash(rs.getString("Diet_Preference")));
+                obj.put("drink",               valueOrDash(rs.getString("Drink")));
+                obj.put("smoke",               valueOrDash(rs.getString("Smoke")));
             } else {
                 obj.put("status", "failed");
                 obj.put("message", "No health record found for this member_id");
@@ -87,5 +89,10 @@ public class EditGetHealthAPI extends HttpServlet {
             obj.put("message", e.getMessage());
             out.print(obj);
         }
+    }
+
+    // Helper: convert null or empty string to "-"
+    private String valueOrDash(String s) {
+        return (s == null || s.trim().isEmpty()) ? "-" : s;
     }
 }

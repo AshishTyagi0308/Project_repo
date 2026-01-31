@@ -1,4 +1,5 @@
 package myPackage;
+
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.sql.Connection;
@@ -6,17 +7,14 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.Arrays;
-import java.util.List;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.annotation.WebServlet;
 
 import org.json.simple.JSONObject;
-
-import javax.servlet.annotation.WebServlet;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
@@ -28,7 +26,6 @@ import io.jsonwebtoken.SignatureException;
 public class WorkoutRecordAPI extends HttpServlet {
     private static final long serialVersionUID = 1L;
 
-    // Database connection details - UPDATE credentials for production use
     private static final String DB_URL = "jdbc:mysql://localhost:3306/gym";
     private static final String DB_USER = "root";
     private static final String DB_PASSWORD = "Ashish_mca@1234";
@@ -60,15 +57,21 @@ public class WorkoutRecordAPI extends HttpServlet {
         out.print(err.toJSONString());
         out.flush();
     }
-    
+
     @Override
     protected void doOptions(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
         resp.setStatus(HttpServletResponse.SC_OK);
     }
 
+    // helper: convert SQL NULL or empty to "-"
+    private String normalize(String value) {
+        return (value == null || value.trim().isEmpty()) ? "-" : value;
+    }
+
     @Override
-    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
 
         String id = request.getParameter("id");
         response.setContentType("application/json");
@@ -98,7 +101,10 @@ public class WorkoutRecordAPI extends HttpServlet {
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
             conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
-            String sql = "SELECT Wk_ID, Start_date, End_date, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday FROM workout_chart WHERE Member_ID = ?";
+
+            String sql = "SELECT Wk_ID, Start_date, End_date, Monday, Tuesday, Wednesday, "
+                    + "Thursday, Friday, Saturday, Sunday "
+                    + "FROM workout_chart WHERE Member_ID = ?";
             pstmt = conn.prepareStatement(sql);
             pstmt.setString(1, id);
             rs = pstmt.executeQuery();
@@ -106,16 +112,28 @@ public class WorkoutRecordAPI extends HttpServlet {
             JsonArray workoutPlans = new JsonArray();
             while (rs.next()) {
                 JsonObject workoutPlan = new JsonObject();
-                workoutPlan.addProperty("start_date", rs.getString("Start_date"));
-                workoutPlan.addProperty("end_date", rs.getString("End_date"));
-                workoutPlan.addProperty("monday", rs.getString("Monday"));
-                workoutPlan.addProperty("tuesday", rs.getString("Tuesday"));
-                workoutPlan.addProperty("wednesday", rs.getString("Wednesday"));
-                workoutPlan.addProperty("thursday", rs.getString("Thursday"));
-                workoutPlan.addProperty("friday", rs.getString("Friday"));
-                workoutPlan.addProperty("saturday", rs.getString("Saturday"));
-                workoutPlan.addProperty("sunday", rs.getString("Sunday"));
+
+                String startDate = normalize(rs.getString("Start_date"));
+                String endDate   = normalize(rs.getString("End_date"));
+                String monday    = normalize(rs.getString("Monday"));
+                String tuesday   = normalize(rs.getString("Tuesday"));
+                String wednesday = normalize(rs.getString("Wednesday"));
+                String thursday  = normalize(rs.getString("Thursday"));
+                String friday    = normalize(rs.getString("Friday"));
+                String saturday  = normalize(rs.getString("Saturday"));
+                String sunday    = normalize(rs.getString("Sunday"));
+
+                workoutPlan.addProperty("start_date", startDate);
+                workoutPlan.addProperty("end_date", endDate);
+                workoutPlan.addProperty("monday", monday);
+                workoutPlan.addProperty("tuesday", tuesday);
+                workoutPlan.addProperty("wednesday", wednesday);
+                workoutPlan.addProperty("thursday", thursday);
+                workoutPlan.addProperty("friday", friday);
+                workoutPlan.addProperty("saturday", saturday);
+                workoutPlan.addProperty("sunday", sunday);
                 workoutPlan.addProperty("workoutId", rs.getString("Wk_ID"));
+
                 workoutPlans.add(workoutPlan);
             }
 

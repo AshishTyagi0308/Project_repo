@@ -27,7 +27,7 @@ public class MemberDashboard extends HttpServlet {
         response.setHeader("Access-Control-Max-Age", "86400");
     }
     
- // JWT validation with error reporting
+    // JWT validation with error reporting
     private boolean isTokenValid(String token, HttpServletResponse response) throws IOException {
         try {
             Jwts.parser()

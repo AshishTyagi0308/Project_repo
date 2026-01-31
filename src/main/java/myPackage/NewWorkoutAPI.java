@@ -23,9 +23,6 @@ public class NewWorkoutAPI extends HttpServlet {
 
     private static final long serialVersionUID = 1L;
 
-    // REMOVED: ALLOWED_ORIGINS and setCORSHeaders (CORS now handled by CORSFilter)
-
-    // JWT validation with error reporting
     private boolean isTokenValid(String token, HttpServletResponse response) throws IOException {
         try {
             Jwts.parser()
@@ -44,15 +41,13 @@ public class NewWorkoutAPI extends HttpServlet {
         }
     }
 
-    // Helper method for sending JSON errors
     private void sendError(HttpServletResponse response, String message) throws IOException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         response.setContentType("application/json");
-        PrintWriter out = response.getWriter();
         JSONObject err = new JSONObject();
-        err.put("error", message);
-        out.print(err.toJSONString());
-        out.flush();
+        err.put("success", false);
+        err.put("message", message);
+        response.getWriter().print(err.toJSONString());
     }
 
     @Override
@@ -61,20 +56,18 @@ public class NewWorkoutAPI extends HttpServlet {
 
         response.setContentType("application/json");
         PrintWriter out = response.getWriter();
+        JSONObject json = new JSONObject();
 
-        // Authentication: Check Authorization header
         String authHeader = request.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             sendError(response, "Unauthorized: Missing or invalid Authorization header.");
             return;
         }
-        String token = authHeader.substring(7); // Remove "Bearer " prefix
 
+        String token = authHeader.substring(7);
         if (!isTokenValid(token, response)) {
             return;
         }
-
-        JSONObject json = new JSONObject();
 
         try {
             String memberIdStr = request.getParameter("id");
@@ -86,7 +79,7 @@ public class NewWorkoutAPI extends HttpServlet {
             }
             int memberID = Integer.parseInt(memberIdStr);
 
-            // Read JSON body params
+            // Read JSON body
             StringBuilder sb = new StringBuilder();
             String line;
             while ((line = request.getReader().readLine()) != null) {
@@ -94,23 +87,35 @@ public class NewWorkoutAPI extends HttpServlet {
             }
             JsonObject body = JsonParser.parseString(sb.toString()).getAsJsonObject();
 
-            String start_date = body.get("start_date").getAsString();
-            String end_date = body.get("end_date").getAsString();
-            String monday = body.get("monday").getAsString();
-            String tuesday = body.get("tuesday").getAsString();
-            String wednesday = body.get("wednesday").getAsString();
-            String thursday = body.get("thursday").getAsString();
-            String friday = body.get("friday").getAsString();
-            String saturday = body.get("saturday").getAsString();
-            String sunday = body.get("sunday").getAsString();
+            String start_date = body.has("start_date") ? body.get("start_date").getAsString() : null;
+            String end_date   = body.has("end_date")   ? body.get("end_date").getAsString() : null;
 
-            // Now insert into DB
+            // ❗ REQUIRED FIELD CHECK
+            if (start_date == null || start_date.trim().isEmpty() ||
+                end_date == null || end_date.trim().isEmpty()) {
+
+                json.put("success", false);
+                json.put("message", "Dates are required");
+                out.print(json);
+                return;
+            }
+
+            // Optional fields (can be null)
+            String monday    = body.has("monday") ? body.get("monday").getAsString() : null;
+            String tuesday   = body.has("tuesday") ? body.get("tuesday").getAsString() : null;
+            String wednesday = body.has("wednesday") ? body.get("wednesday").getAsString() : null;
+            String thursday  = body.has("thursday") ? body.get("thursday").getAsString() : null;
+            String friday    = body.has("friday") ? body.get("friday").getAsString() : null;
+            String saturday  = body.has("saturday") ? body.get("saturday").getAsString() : null;
+            String sunday    = body.has("sunday") ? body.get("sunday").getAsString() : null;
+
             Class.forName("com.mysql.cj.jdbc.Driver");
             Connection conn = DriverManager.getConnection(
                     "jdbc:mysql://localhost:3306/gym", "root", "Ashish_mca@1234");
 
             String sql = "INSERT INTO workout_chart(Member_ID, Start_date, End_date, Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday) "
                     + "VALUES (?,?,?,?,?,?,?,?,?,?)";
+
             PreparedStatement ps = conn.prepareStatement(sql);
             ps.setInt(1, memberID);
             ps.setString(2, start_date);
@@ -127,21 +132,14 @@ public class NewWorkoutAPI extends HttpServlet {
             json.put("success", status > 0);
             json.put("message", status > 0 ? "Workout Plan Added Successfully" : "Failed to Add Workout Plan");
             out.print(json);
+
             conn.close();
 
         } catch (Exception e) {
             e.printStackTrace();
             json.put("success", false);
             json.put("error", e.getMessage());
-            json.put("exception", e.toString());
-            StringBuilder stackTraceBuilder = new StringBuilder();
-            for (StackTraceElement element : e.getStackTrace()) {
-                stackTraceBuilder.append(element.toString()).append("\n");
-            }
-            json.put("stackTraceString", stackTraceBuilder.toString());
             out.print(json);
         }
     }
-
-    // REMOVED doOptions (CORS handled globally by filter)
 }

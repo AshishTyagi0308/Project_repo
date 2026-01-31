@@ -1,4 +1,5 @@
 package myPackage;
+
 import org.json.simple.JSONObject;
 
 import io.jsonwebtoken.Jwts;
@@ -6,24 +7,27 @@ import io.jsonwebtoken.SignatureException;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.sql.*;
+import java.util.Arrays;
+import java.util.List;
+
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.sql.*;
-import java.util.Arrays;
-import java.util.List;
 
 @SuppressWarnings("unchecked")
 @WebServlet("/MemberDetail/*")
 public class MemberDetail extends HttpServlet {
     private static final long serialVersionUID = 1L;
 
-    private static final String URL = "jdbc:mysql://localhost:3306/gym";
+    // ✅ DB config
+    private static final String URL  = "jdbc:mysql://localhost:3306/gym";
     private static final String USER = "root";
     private static final String PASS = "Ashish_mca@1234";
-    
+
+    // ✅ CORS: allow only specific frontends
     private static final List<String> ALLOWED_ORIGINS = Arrays.asList(
         "http://localhost:5173",
         "https://wellness-management-system.vercel.app",
@@ -42,13 +46,17 @@ public class MemberDetail extends HttpServlet {
         if (reqHeaders != null) {
             response.setHeader("Access-Control-Allow-Headers", reqHeaders);
         } else {
-            response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning");
+            response.setHeader(
+                "Access-Control-Allow-Headers",
+                "Content-Type, Authorization, ngrok-skip-browser-warning"
+            );
         }
         response.setHeader("Access-Control-Max-Age", "864000");
     }
 
-    // JWT validation with error reporting
-    private boolean isTokenValid(String token, HttpServletResponse response, HttpServletRequest request) throws IOException {
+    // ✅ JWT validation (same as before)
+    private boolean isTokenValid(String token, HttpServletResponse response,
+                                 HttpServletRequest request) throws IOException {
         try {
             Jwts.parser()
                 .setSigningKey("RaJdNoqNevTsnjh9Vgbe/LgPCrbcjwTCfKWpBuOyPTM=".getBytes())
@@ -66,8 +74,8 @@ public class MemberDetail extends HttpServlet {
         }
     }
 
-    // Helper method for sending JSON errors with CORS headers
-    private void sendError(HttpServletResponse response, HttpServletRequest request, String message) throws IOException {
+    private void sendError(HttpServletResponse response, HttpServletRequest request,
+                           String message) throws IOException {
         addCORSHeaders(response, request);
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType("application/json");
@@ -79,21 +87,29 @@ public class MemberDetail extends HttpServlet {
     }
 
     @Override
-    protected void doOptions(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    protected void doOptions(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
         addCORSHeaders(response, request);
         response.setStatus(HttpServletResponse.SC_OK);
     }
 
+    // ✅ Support both /MemberDetail?id=12 and /MemberDetail/12
     private Integer getMemberId(HttpServletRequest request) {
         String idParam = request.getParameter("id");
         if (idParam != null) {
-            try { return Integer.parseInt(idParam); }
-            catch (NumberFormatException e) { return null; }
+            try {
+                return Integer.parseInt(idParam);
+            } catch (NumberFormatException e) {
+                return null;
+            }
         }
-        String pathInfo = request.getPathInfo();
+        String pathInfo = request.getPathInfo(); // e.g. "/12"
         if (pathInfo != null && pathInfo.length() > 1) {
-            try { return Integer.parseInt(pathInfo.substring(1)); }
-            catch (NumberFormatException e) { return null; }
+            try {
+                return Integer.parseInt(pathInfo.substring(1));
+            } catch (NumberFormatException e) {
+                return null;
+            }
         }
         return null;
     }
@@ -101,35 +117,40 @@ public class MemberDetail extends HttpServlet {
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-        addCORSHeaders(response, request);  // Always set CORS headers!
+
+        addCORSHeaders(response, request);
         response.setContentType("application/json");
         PrintWriter out = response.getWriter();
 
-        // Authentication: Check Authorization header
+        // ✅ Auth check
         String authHeader = request.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            sendError(response, request, "Unauthorized: Missing or invalid Authorization header.");
+            sendError(response, request,
+                "Unauthorized: Missing or invalid Authorization header.");
             return;
         }
 
-        String token = authHeader.substring(7); // Remove "Bearer " prefix
-
+        String token = authHeader.substring(7); // strip "Bearer "
         if (!isTokenValid(token, response, request)) {
-            // Error sent inside isTokenValid; return directly
             return;
         }
 
         Integer memberId = getMemberId(request);
         if (memberId == null) {
-            out.println("{\"error\":\"Invalid or missing member ID.\"}");
+            JSONObject err = new JSONObject();
+            err.put("error", "Invalid or missing member ID.");
+            out.println(err.toJSONString());
             return;
         }
 
+        Connection con = null;
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
-            Connection con = DriverManager.getConnection(URL, USER, PASS);
+            con = DriverManager.getConnection(URL, USER, PASS);
 
-            String sql = "SELECT * FROM member WHERE Member_ID = ?";
+            String sql =
+                "SELECT Name, Gender, DOB, Phone_no, Address, Photo " +
+                "FROM member WHERE Member_ID = ?";
             PreparedStatement ps = con.prepareStatement(sql);
             ps.setInt(1, memberId);
             ResultSet rs = ps.executeQuery();
@@ -141,14 +162,34 @@ public class MemberDetail extends HttpServlet {
                 member.put("dob", rs.getString("DOB"));
                 member.put("phone", rs.getString("Phone_no"));
                 member.put("address", rs.getString("Address"));
+
+                // ✅ OPTION 1: Photo stored as TEXT containing full data URL
+                // Example stored value: "data:image/jpeg;base64,/9j/4AAQSk..."
+                String photoString = rs.getString("Photo");
+                if (photoString != null && !photoString.isEmpty()) {
+                    // Send it back as-is; frontend can use it directly in <img src={photo}>
+                    member.put("photo", photoString);
+                } else {
+                    // No photo present
+                    member.put("photo", null);
+                }
+
                 out.println(member.toJSONString());
             } else {
-                out.println("{\"message\":\"Member not found.\"}");
+                JSONObject json = new JSONObject();
+                json.put("message", "Member not found.");
+                out.println(json.toJSONString());
             }
-            con.close();
+
         } catch (Exception e) {
-            addCORSHeaders(response, request); // Add CORS for error response, if not already added
-            out.println("{\"error\":\"" + e.getMessage() + "\"}");
+            addCORSHeaders(response, request);
+            JSONObject err = new JSONObject();
+            err.put("error", e.getMessage());
+            out.println(err.toJSONString());
+        } finally {
+            try {
+                if (con != null) con.close();
+            } catch (SQLException ignore) {}
         }
     }
 }

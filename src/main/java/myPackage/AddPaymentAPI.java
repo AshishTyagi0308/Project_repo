@@ -5,6 +5,8 @@ import javax.servlet.annotation.WebServlet;
 import javax.servlet.http.*;
 import java.io.*;
 import java.sql.*;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.Arrays;
 import java.util.List;
 import org.json.simple.JSONObject;
@@ -20,29 +22,8 @@ public class AddPaymentAPI extends HttpServlet {
     private static final String DB_USER = "root";
     private static final String DB_PASS = "Ashish_mca@1234";
 
-    private static final List<String> ALLOWED_ORIGINS = Arrays.asList(
-        "http://localhost:5173",
-        "https://wellness-management-system.vercel.app",
-        "https://admonitorial-cinderella-hungerly.ngrok-free.dev"
-    );
-
-    private void setCorsHeaders(HttpServletRequest request, HttpServletResponse response) {
-        String origin = request.getHeader("Origin");
-        if (origin != null && ALLOWED_ORIGINS.contains(origin)) {
-            response.setHeader("Access-Control-Allow-Origin", origin); 
-            response.setHeader("Access-Control-Allow-Credentials", "true");
-        } else {
-            response.setHeader("Access-Control-Allow-Origin", "null");
-        }
-        response.setHeader("Vary", "Origin");
-        response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-        response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning");
-        response.setHeader("Access-Control-Max-Age", "864000"); // cache preflight 10 days
-    }
-
-    // Helper for consistent error response
-    private void sendError(HttpServletResponse response, String message) throws IOException {
-        response.setStatus(HttpServletResponse.SC_BAD_REQUEST); // Always BAD_REQUEST for frontend error
+        private void sendError(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
         response.setContentType("application/json");
         JSONObject err = new JSONObject();
         err.put("success", false);
@@ -70,27 +51,20 @@ public class AddPaymentAPI extends HttpServlet {
         }
     }
 
-    @Override
-    protected void doOptions(HttpServletRequest req, HttpServletResponse resp)
-            throws ServletException, IOException {
-        setCorsHeaders(req, resp);
-        resp.setStatus(HttpServletResponse.SC_OK);
-    }
-
+    
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
-        setCorsHeaders(req, resp);
 
         String authHeader = req.getHeader("Authorization");
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7); // Remove "Bearer " prefix
+            String token = authHeader.substring(7);
             if (!isTokenValid(token, resp)) {
                 return;
             }
         }
 
-        // Read JSON body from request
+        // Read JSON body
         StringBuilder sb = new StringBuilder();
         try (BufferedReader reader = req.getReader()) {
             String line;
@@ -108,44 +82,82 @@ public class AddPaymentAPI extends HttpServlet {
             return;
         }
 
-        // Always extract id only from URL param "id"
-        String id = req.getParameter("id");
-
-        // Extract payment params from JSON
+        // Parameters
+        String id = req.getParameter("id");        // Membership_ID from URL
         String payMode = (String) jsonRequest.get("mode");
-        String startDate = (String) jsonRequest.get("pay_date");
-        String endDate = (String) jsonRequest.get("due_date"); // <-- can be ""
+        String startDateStr = (String) jsonRequest.get("pay_date");
+        String dueDateStr   = (String) jsonRequest.get("due_date");
+        String paidFeeStr   = (String) jsonRequest.get("amount");
 
-        String paidFeeStr = (String) jsonRequest.get("amount");
-
-        // Validation: allow empty due_date by removing from required list
         if (id == null || id.isEmpty() ||
             payMode == null || payMode.isEmpty() ||
-            startDate == null || startDate.isEmpty() ||
+            startDateStr == null || startDateStr.isEmpty() ||
             paidFeeStr == null || paidFeeStr.isEmpty()) {
-            sendError(resp, "Missing required payment parameters");
+            sendError(resp, "All fields are required except Due Date");
             return;
         }
 
-        // Set due_date to null if empty string (will become SQL NULL)
-        String dueDateForDB = (endDate == null || endDate.trim().isEmpty()) ? null : endDate;
+        // Parse dates
+        LocalDate payDate;
+        LocalDate dueDate = null;  // nullable
+        try {
+            payDate = LocalDate.parse(startDateStr);  // yyyy-MM-dd
+            if (dueDateStr != null && !dueDateStr.trim().isEmpty()) {
+                dueDate = LocalDate.parse(dueDateStr);
+            }
+        } catch (DateTimeParseException e) {
+            sendError(resp, "Invalid date format. Expected yyyy-MM-dd");
+            return;
+        }
 
         try {
             double paidFee = Double.parseDouble(paidFeeStr);
-            Class.forName("com.mysql.jdbc.Driver");
+            Class.forName("com.mysql.cj.jdbc.Driver");
 
             try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS)) {
-                String insertSQL = "INSERT INTO payment (Membership_ID, Pay_mode, Pay_date, Due_date, Paid_fee) VALUES (?, ?, ?, ?, ?)";
+
+                // 1) Fetch membership end date for given Membership_ID
+                LocalDate membershipEndDate = null;
+                String membershipSql = "SELECT End_date FROM membership WHERE Membership_ID = ?";
+                try (PreparedStatement ms = conn.prepareStatement(membershipSql)) {
+                    ms.setString(1, id);
+                    try (ResultSet rs = ms.executeQuery()) {
+                        if (rs.next()) {
+                            Date endDateSql = rs.getDate("End_date");
+                            if (endDateSql != null) {
+                                membershipEndDate = endDateSql.toLocalDate();
+                            }
+                        }
+                    }
+                }
+
+                if (membershipEndDate == null) {
+                    sendError(resp, "Membership not found or end date not set for Membership_ID: " + id);
+                    return;
+                }
+
+                // 2) If dueDate is provided, it must be <= membershipEndDate
+                if (dueDate != null && dueDate.isAfter(membershipEndDate)) {
+                    sendError(resp, "Payment due date cannot be after membership end date (" 
+                                      + membershipEndDate.toString() + ")");
+                    return; // stop, do not insert
+                }
+
+                // 3) Insert payment
+                String insertSQL =
+                    "INSERT INTO payment (Membership_ID, Pay_mode, Pay_date, Due_date, Paid_fee) " +
+                    "VALUES (?, ?, ?, ?, ?)";
                 try (PreparedStatement stmt = conn.prepareStatement(insertSQL)) {
                     stmt.setString(1, id);
                     stmt.setString(2, payMode);
-                    stmt.setString(3, startDate);
-                    // Allow due_date to be nullable
-                    if (dueDateForDB == null) {
+                    stmt.setDate(3, Date.valueOf(payDate));
+
+                    if (dueDate == null) {
                         stmt.setNull(4, java.sql.Types.DATE);
                     } else {
-                        stmt.setString(4, dueDateForDB);
+                        stmt.setDate(4, Date.valueOf(dueDate));
                     }
+
                     stmt.setDouble(5, paidFee);
 
                     int rows = stmt.executeUpdate();
@@ -154,8 +166,8 @@ public class AddPaymentAPI extends HttpServlet {
                         result.put("success", true);
                         result.put("message", "Add Payment Successful.");
                         result.put("pay_mode", payMode);
-                        result.put("pay_date", startDate);
-                        result.put("due_date", dueDateForDB); // null/empty allowed
+                        result.put("pay_date", payDate.toString());
+                        result.put("due_date", (dueDate == null) ? null : dueDate.toString());
                         result.put("amount", paidFee);
                         resp.setContentType("application/json");
                         resp.getWriter().write(result.toJSONString());
@@ -165,7 +177,7 @@ public class AddPaymentAPI extends HttpServlet {
                 }
             }
         } catch (NumberFormatException e) {
-            sendError(resp, "Invalid paid_fee format");
+            sendError(resp, "Invalid amount format");
         } catch (SQLException e) {
             sendError(resp, "Database error: " + e.getMessage());
         } catch (ClassNotFoundException e) {

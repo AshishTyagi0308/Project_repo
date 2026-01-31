@@ -29,20 +29,7 @@ public class EditProgressAPI extends HttpServlet {
     private static final DateTimeFormatter INPUT_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter DB_FMT    = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-    // ====== Public HTTP methods (required to avoid 405) ======
-    @Override
-    protected void doGet(HttpServletRequest req, HttpServletResponse resp)
-            throws ServletException, IOException {
-        handleGetExistingProgress(req, resp);
-    }
-
-    @Override
-    protected void doPut(HttpServletRequest req, HttpServletResponse resp)
-            throws ServletException, IOException {
-        handleUpdateProgress(req, resp);
-    }
-
-    // ====== JWT validation ======
+    // ===== JWT validation =====
     private boolean isTokenValid(String token, HttpServletResponse response) throws IOException {
         try {
             Jwts.parser()
@@ -50,38 +37,60 @@ public class EditProgressAPI extends HttpServlet {
                 .parseClaimsJws(token);
             return true;
         } catch (SignatureException e) {
-            sendError(response, "Invalid token signature");
+            sendJsonError(response, HttpServletResponse.SC_UNAUTHORIZED, "Invalid token signature");
             return false;
         } catch (io.jsonwebtoken.ExpiredJwtException e) {
-            sendError(response, "Token expired");
+            sendJsonError(response, HttpServletResponse.SC_UNAUTHORIZED, "Token expired");
             return false;
         } catch (Exception e) {
-            sendError(response, "Malformed or invalid token: " + e.getMessage());
+            sendJsonError(response, HttpServletResponse.SC_UNAUTHORIZED,
+                    "Malformed or invalid token: " + e.getMessage());
             return false;
         }
     }
 
-    private void sendError(HttpServletResponse response, String message) throws IOException {
-        response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+    // unified error JSON
+    private void sendJsonError(HttpServletResponse response, int status, String message)
+            throws IOException {
+        response.setStatus(status);
         response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
         JSONObject err = new JSONObject();
-        err.put("error", message);
+        err.put("success", false);
+        err.put("message", message);
         PrintWriter out = response.getWriter();
         out.print(err.toJSONString());
         out.flush();
     }
 
-    // ========== GET: fetch existing row for prefill ==========
+    private void sendJsonOk(HttpServletResponse response, JSONObject obj) throws IOException {
+        response.setStatus(HttpServletResponse.SC_OK);
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
+        PrintWriter out = response.getWriter();
+        out.print(obj.toJSONString());
+        out.flush();
+    }
+
+    // ===== Helper: parse float safely =====
+    private Float parseRequiredFloat(Object value) {
+        if (value == null) return null;
+        try {
+            return Float.parseFloat(value.toString());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    // ========== GET: fetch existing progress row ==========
     private void handleGetExistingProgress(HttpServletRequest req, HttpServletResponse resp)
             throws IOException {
 
-        resp.setContentType("application/json");
-        resp.setCharacterEncoding("UTF-8");
-
-        // JWT
+        // JWT check
         String authHeader = req.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            sendError(resp, "Unauthorized: Missing or invalid Authorization header.");
+            sendJsonError(resp, HttpServletResponse.SC_UNAUTHORIZED,
+                    "Unauthorized: Missing or invalid Authorization header.");
             return;
         }
         String token = authHeader.substring(7);
@@ -89,15 +98,17 @@ public class EditProgressAPI extends HttpServlet {
 
         String progressIdParam = req.getParameter("id");
         if (progressIdParam == null || progressIdParam.trim().isEmpty()) {
-            sendError(resp, "Progress_ID (id param) is required");
+            sendJsonError(resp, HttpServletResponse.SC_BAD_REQUEST,
+                    "Progress_ID (id param) is required");
             return;
         }
 
         int progressId;
         try {
             progressId = Integer.parseInt(progressIdParam);
-        } catch (NumberFormatException e) {
-            sendError(resp, "Progress_ID must be a valid integer");
+        } catch (Exception e) {
+            sendJsonError(resp, HttpServletResponse.SC_BAD_REQUEST,
+                    "Progress_ID must be a valid integer");
             return;
         }
 
@@ -109,9 +120,9 @@ public class EditProgressAPI extends HttpServlet {
             Class.forName("com.mysql.cj.jdbc.Driver");
             con = DriverManager.getConnection(URL, USER, PASS);
 
-            String sql = "SELECT Progress_ID, Member_ID, Date, Height, Weight, Arms, Chest, " +
-                         "Shoulder, Back, Waist, Thighs, Muscle, Fat " +
-                         "FROM progress_chart WHERE Progress_ID = ?";
+            String sql = "SELECT Progress_ID, Member_ID, Date, Height, Weight, Arms, Chest, "
+                    + "Shoulder, Back, Waist, Thighs, Muscle, Fat "
+                    + "FROM progress_chart WHERE Progress_ID = ?";
             ps = con.prepareStatement(sql);
             ps.setInt(1, progressId);
             rs = ps.executeQuery();
@@ -123,8 +134,7 @@ public class EditProgressAPI extends HttpServlet {
                 obj.put("member_id", rs.getInt("Member_ID"));
 
                 Date date = rs.getDate("Date");
-                String dateStr = date.toLocalDate().format(DB_FMT);
-                obj.put("date", dateStr);
+                obj.put("date", date.toLocalDate().format(DB_FMT));
 
                 obj.put("height", rs.getFloat("Height"));
                 obj.put("weight", rs.getFloat("Weight"));
@@ -137,36 +147,35 @@ public class EditProgressAPI extends HttpServlet {
                 obj.put("muscle_percent", rs.getFloat("Muscle"));
                 obj.put("fat_percent", rs.getFloat("Fat"));
 
-                resp.setStatus(HttpServletResponse.SC_OK);
-                PrintWriter out = resp.getWriter();
-                out.print(obj.toJSONString());
-                out.flush();
+                obj.put("success", true);
+                obj.put("message", "Progress record fetched successfully");
+
+                sendJsonOk(resp, obj);
+
             } else {
-                sendError(resp, "No progress record found with this Progress_ID");
+                sendJsonError(resp, HttpServletResponse.SC_NOT_FOUND,
+                        "No progress record found with this Progress_ID");
             }
 
         } catch (Exception e) {
-            sendError(resp, "Database/server error: " + e.getMessage());
+            sendJsonError(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+                    "Database/server error: " + e.getMessage());
         } finally {
-            try { if (rs  != null) rs.close(); } catch (Exception e) {}
-            try { if (ps  != null) ps.close(); } catch (Exception e) {}
+            try { if (rs != null) rs.close(); } catch (Exception e) {}
+            try { if (ps != null) ps.close(); } catch (Exception e) {}
             try { if (con != null) con.close(); } catch (Exception e) {}
         }
     }
 
-    // ========== PUT: update row with JSON body ==========
+    // ========== PUT: update row ==========
     private void handleUpdateProgress(HttpServletRequest req, HttpServletResponse resp)
             throws IOException {
 
-        resp.setContentType("application/json");
-        resp.setCharacterEncoding("UTF-8");
-        PrintWriter out = resp.getWriter();
-        JSONObject obj = new JSONObject();
-
-        // JWT
+        // JWT check
         String authHeader = req.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            sendError(resp, "Unauthorized: Missing or invalid Authorization header.");
+            sendJsonError(resp, HttpServletResponse.SC_UNAUTHORIZED,
+                    "Unauthorized: Missing or invalid Authorization header.");
             return;
         }
         String token = authHeader.substring(7);
@@ -174,68 +183,80 @@ public class EditProgressAPI extends HttpServlet {
 
         String progressIdParam = req.getParameter("id");
         if (progressIdParam == null || progressIdParam.trim().isEmpty()) {
-            sendError(resp, "Progress_ID (id param) is required");
+            sendJsonError(resp, HttpServletResponse.SC_BAD_REQUEST,
+                    "Progress_ID (id param) is required");
             return;
         }
 
         int progressId;
         try {
             progressId = Integer.parseInt(progressIdParam);
-        } catch (NumberFormatException e) {
-            sendError(resp, "Progress_ID must be a valid integer");
+        } catch (Exception e) {
+            sendJsonError(resp, HttpServletResponse.SC_BAD_REQUEST,
+                    "Progress_ID must be a valid integer");
             return;
         }
 
-        // Read JSON body (same fields as AddProgressAPI)
-        String dateStr;
-        float heightCm, weightKg;
-        float arms, chest, shoulder, back;
-        float waist, thighs, muscle, fat;
-
-        try {
+        // Read JSON body
+        String body;
+        try (BufferedReader reader = req.getReader()) {
             StringBuilder sb = new StringBuilder();
             String line;
-            BufferedReader reader = req.getReader();
-            while ((line = reader.readLine()) != null) {
-                sb.append(line);
-            }
-            String body = sb.toString();
-            if (body.isEmpty()) {
-                sendError(resp, "Request body is empty. Data required in JSON format.");
-                return;
-            }
+            while ((line = reader.readLine()) != null) sb.append(line);
+            body = sb.toString();
+        }
 
-            JSONObject json = (JSONObject) new JSONParser().parse(body);
+        if (body.trim().isEmpty()) {
+            sendJsonError(resp, HttpServletResponse.SC_BAD_REQUEST, "All fields are required.");
+            return;
+        }
 
-            dateStr   = (String) json.get("date");
-            heightCm  = Float.parseFloat(json.get("height").toString());
-            weightKg  = Float.parseFloat(json.get("weight").toString());
-            arms      = Float.parseFloat(json.get("arms").toString());
-            chest     = Float.parseFloat(json.get("chest").toString());
-            shoulder  = Float.parseFloat(json.get("shoulder").toString());
-            back      = Float.parseFloat(json.get("back").toString());
-            waist     = Float.parseFloat(json.get("waist").toString());
-            thighs    = Float.parseFloat(json.get("thighs").toString());
-            muscle    = Float.parseFloat(json.get("muscle_percent").toString());
-            fat       = Float.parseFloat(json.get("fat_percent").toString());
-
+        JSONObject json;
+        try {
+            json = (JSONObject) new JSONParser().parse(body);
         } catch (Exception e) {
-            sendError(resp, "Failed to parse JSON: " + e.getMessage());
+            sendJsonError(resp, HttpServletResponse.SC_BAD_REQUEST,
+                    "All fields are required.");
+            return;
+        }
+
+        // Read values
+        String dateStr = (json.get("date") == null) ? null : json.get("date").toString().trim();
+
+        Float heightCm = parseRequiredFloat(json.get("height"));
+        Float weightKg = parseRequiredFloat(json.get("weight"));
+        Float arms     = parseRequiredFloat(json.get("arms"));
+        Float chest    = parseRequiredFloat(json.get("chest"));
+        Float shoulder = parseRequiredFloat(json.get("shoulder"));
+        Float back     = parseRequiredFloat(json.get("back"));
+        Float waist    = parseRequiredFloat(json.get("waist"));
+        Float thighs   = parseRequiredFloat(json.get("thighs"));
+        Float muscle   = parseRequiredFloat(json.get("muscle_percent"));
+        Float fat      = parseRequiredFloat(json.get("fat_percent"));
+
+        // FINAL unified validation
+        if (dateStr == null || dateStr.isEmpty() ||
+            heightCm == null || weightKg == null || arms == null ||
+            chest == null || shoulder == null || back == null ||
+            waist == null || thighs == null || muscle == null || fat == null) {
+
+            sendJsonError(resp, HttpServletResponse.SC_BAD_REQUEST,
+                    "All fields are required.");
             return;
         }
 
         // Convert date
         Date sqlDate;
         try {
-            LocalDate localDate = LocalDate.parse(dateStr, INPUT_FMT);
-            String dbDateStr = localDate.format(DB_FMT);
-            sqlDate = Date.valueOf(dbDateStr);
+            LocalDate ld = LocalDate.parse(dateStr, INPUT_FMT);
+            sqlDate = Date.valueOf(ld.format(DB_FMT));
         } catch (Exception e) {
-            sendError(resp, "Invalid date format. Expected yyyy-MM-dd");
+            sendJsonError(resp, HttpServletResponse.SC_BAD_REQUEST,
+                    "All fields are required.");
             return;
         }
 
-        // JDBC update
+        // Update DB
         Connection con = null;
         PreparedStatement ps = null;
 
@@ -243,11 +264,10 @@ public class EditProgressAPI extends HttpServlet {
             Class.forName("com.mysql.cj.jdbc.Driver");
             con = DriverManager.getConnection(URL, USER, PASS);
 
-            String query =
-                "UPDATE progress_chart SET " +
-                "Date = ?, Height = ?, Weight = ?, Arms = ?, Chest = ?, " +
-                "Shoulder = ?, Back = ?, Waist = ?, Thighs = ?, Muscle = ?, Fat = ? " +
-                "WHERE Progress_ID = ?";
+            String query = "UPDATE progress_chart SET "
+                    + "Date=?, Height=?, Weight=?, Arms=?, Chest=?, "
+                    + "Shoulder=?, Back=?, Waist=?, Thighs=?, Muscle=?, Fat=? "
+                    + "WHERE Progress_ID=?";
 
             ps = con.prepareStatement(query);
             ps.setDate(1, sqlDate);
@@ -266,33 +286,37 @@ public class EditProgressAPI extends HttpServlet {
             int rows = ps.executeUpdate();
 
             if (rows > 0) {
-                resp.setStatus(HttpServletResponse.SC_OK);
+                JSONObject obj = new JSONObject();
                 obj.put("success", true);
                 obj.put("message", "Progress updated successfully");
                 obj.put("progress_id", progressId);
-                obj.put("date", dateStr);
-                obj.put("height", heightCm);
-                obj.put("weight", weightKg);
-                obj.put("arms", arms);
-                obj.put("chest", chest);
-                obj.put("shoulder", shoulder);
-                obj.put("back", back);
-                obj.put("waist", waist);
-                obj.put("thighs", thighs);
-                obj.put("muscle_percent", muscle);
-                obj.put("fat_percent", fat);
 
-                out.print(obj.toJSONString());
-                out.flush();
+                sendJsonOk(resp, obj);
             } else {
-                sendError(resp, "No progress record found with this Progress_ID");
+                sendJsonError(resp, HttpServletResponse.SC_NOT_FOUND,
+                        "No progress record found with this Progress_ID");
             }
 
         } catch (Exception e) {
-            sendError(resp, "Database/server error: " + e.getMessage());
+            sendJsonError(resp, HttpServletResponse.SC_INTERNAL_SERVER_ERROR,
+                    "Database/server error: " + e.getMessage());
         } finally {
-            try { if (ps  != null) ps.close();  } catch (Exception e) {}
+            try { if (ps != null) ps.close(); } catch (Exception e) {}
             try { if (con != null) con.close(); } catch (Exception e) {}
         }
+    }
+
+    // ====== doGet ======
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp)
+            throws IOException {
+        handleGetExistingProgress(req, resp);
+    }
+
+    // ====== doPut ======
+    @Override
+    protected void doPut(HttpServletRequest req, HttpServletResponse resp)
+            throws IOException {
+        handleUpdateProgress(req, resp);
     }
 }

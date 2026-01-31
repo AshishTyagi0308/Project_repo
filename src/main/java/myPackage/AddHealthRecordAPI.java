@@ -139,6 +139,26 @@ public class AddHealthRecordAPI extends HttpServlet {
             Class.forName("com.mysql.cj.jdbc.Driver");
             con = DriverManager.getConnection(URL, USER, PASS);
 
+            // **NEW: Check if record already exists for this member_id**
+            String checkSql = "SELECT COUNT(*) FROM health_records WHERE Member_ID = ?";
+            PreparedStatement checkPs = con.prepareStatement(checkSql);
+            checkPs.setString(1, member_id);
+            ResultSet rs = checkPs.executeQuery();
+            
+            if (rs.next() && rs.getInt(1) > 0) {
+                jsonResponse.put("success", false);
+                jsonResponse.put("message", "Health record already exists for this member. Delete existing record first.");
+                out.print(jsonResponse.toJSONString());
+                out.flush();
+                
+                rs.close();
+                checkPs.close();
+                return;
+            }
+            rs.close();
+            checkPs.close();
+
+            // **Proceed with INSERT only if no existing record**
             String sql = "INSERT INTO health_records "
                     + "(Member_ID, Medical_History, Curr_Medication, Allergy, Surgery, Injury, "
                     + "Supplement, Diet_Preference, Drink, Smoke) "
@@ -156,11 +176,17 @@ public class AddHealthRecordAPI extends HttpServlet {
             ps.setString(9,  drink);
             ps.setString(10, smoke);
 
-            ps.executeUpdate(); // if no exception, treat as success
-
-            jsonResponse.put("success", true);
-            jsonResponse.put("message", "Health Record Added Successfully");
-            resp.setStatus(HttpServletResponse.SC_OK);
+            int rowsAffected = ps.executeUpdate();
+            
+            if (rowsAffected > 0) {
+                jsonResponse.put("success", true);
+                jsonResponse.put("message", "Health Record Added Successfully");
+                resp.setStatus(HttpServletResponse.SC_OK);
+            } else {
+                jsonResponse.put("success", false);
+                jsonResponse.put("message", "Failed to add health record - no rows affected");
+                resp.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+            }
 
         } catch (Exception e) {
             jsonResponse.put("success", false);

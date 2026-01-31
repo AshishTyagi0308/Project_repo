@@ -7,8 +7,6 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.util.Arrays;
-import java.util.List;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.WebServlet;
@@ -24,7 +22,7 @@ import com.google.gson.JsonObject;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureException;
 
-
+@SuppressWarnings("unchecked")
 @WebServlet("/EditMemberAPI")
 public class EditMemberAPI extends HttpServlet {
     private static final long serialVersionUID = 1L;
@@ -33,8 +31,7 @@ public class EditMemberAPI extends HttpServlet {
     private static final String DB_USER = "root";
     private static final String DB_PASSWORD = "Ashish_mca@1234";
 
-        
- // JWT validation with error reporting
+    // JWT validation with error reporting
     private boolean isTokenValid(String token, HttpServletResponse response) throws IOException {
         try {
             Jwts.parser()
@@ -53,13 +50,15 @@ public class EditMemberAPI extends HttpServlet {
         }
     }
 
-    // Helper method for sending JSON errors
+    // Helper method for sending JSON errors (401)
     private void sendError(HttpServletResponse response, String message) throws IOException {
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
         PrintWriter out = response.getWriter();
         JSONObject err = new JSONObject();
-        err.put("error", message);
+        err.put("success", false);
+        err.put("message", message);
         out.print(err.toJSONString());
         out.flush();
     }
@@ -73,32 +72,37 @@ public class EditMemberAPI extends HttpServlet {
     @Override
     protected void doPut(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
-           response.setContentType("application/json");
+
+        response.setContentType("application/json");
+        response.setCharacterEncoding("UTF-8");
         PrintWriter out = response.getWriter();
-        
-     // Authentication: Check Authorization header
+        Gson gson = new Gson();
+        JsonObject jsonResponse = new JsonObject();
+
+        // 1. Auth header check
         String authHeader = request.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             sendError(response, "Unauthorized: Missing or invalid Authorization header.");
             return;
         }
 
-        String token = authHeader.substring(7); // Remove "Bearer " prefix
-
+        String token = authHeader.substring(7);
         if (!isTokenValid(token, response)) {
-            // Error sent inside isTokenValid; return directly
-            return;
+            return; // error already sent
         }
 
+        // 2. Member ID from query param ?id=...
         String oldMemberId = request.getParameter("id");
         if (oldMemberId == null || oldMemberId.trim().isEmpty()) {
-            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            out.print("{\"error\":\"Missing or empty member id (id) parameter\"}");
+            jsonResponse.addProperty("success", false);
+            jsonResponse.addProperty("message", "Missing or empty member id (id) parameter.");
+            out.print(gson.toJson(jsonResponse));
+            out.flush();
             return;
         }
         oldMemberId = oldMemberId.trim();
 
-        // Read JSON body
+        // 3. Read JSON body
         StringBuilder sb = new StringBuilder();
         try (BufferedReader reader = request.getReader()) {
             String line;
@@ -106,36 +110,50 @@ public class EditMemberAPI extends HttpServlet {
                 sb.append(line);
             }
         }
-        String body = sb.toString();
 
-        Gson gson = new Gson();
         JsonObject jsonData;
         try {
-            jsonData = gson.fromJson(body, JsonObject.class);
+            jsonData = gson.fromJson(sb.toString(), JsonObject.class);
         } catch (Exception e) {
-            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            out.print("{\"error\":\"Invalid JSON body\"}");
+            jsonResponse.addProperty("success", false);
+            jsonResponse.addProperty("message", "Invalid JSON body.");
+            out.print(gson.toJson(jsonResponse));
+            out.flush();
             return;
         }
 
-        String name = jsonData.has("name") ? jsonData.get("name").getAsString().trim() : null;
-        String gender = jsonData.has("gender") ? jsonData.get("gender").getAsString().trim() : null;
-        String photo = jsonData.has("photo") ? jsonData.get("photo").getAsString().trim() : null;
-        String address = jsonData.has("address") ? jsonData.get("address").getAsString().trim() : null;
-        String phone = jsonData.has("phone") ? jsonData.get("phone").getAsString().trim() : null;
-        String dob = jsonData.has("dob") ? jsonData.get("dob").getAsString().trim() : null;
-
-        if (name == null || name.isEmpty() ||
-            gender == null || gender.isEmpty() ||
-            /*photo == null || photo.isEmpty() ||*/
-            address == null || address.isEmpty() ||
-            phone == null || phone.isEmpty() ||
-            dob == null || dob.isEmpty()) {
-            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-            out.print("{\"error\":\"Missing or empty parameters in JSON body\"}");
+        if (jsonData == null) {
+            jsonResponse.addProperty("success", false);
+            jsonResponse.addProperty("message", "Empty JSON body.");
+            out.print(gson.toJson(jsonResponse));
+            out.flush();
             return;
         }
 
+        // 4. Safely read fields (avoid JsonNull.getAsString())
+        String name   = jsonData.has("name")   && jsonData.get("name")   != null && !jsonData.get("name").isJsonNull()
+                        ? jsonData.get("name").getAsString().trim() : "";
+        String dob    = jsonData.has("dob")    && jsonData.get("dob")    != null && !jsonData.get("dob").isJsonNull()
+                        ? jsonData.get("dob").getAsString().trim() : "";
+        String gender = jsonData.has("gender") && jsonData.get("gender") != null && !jsonData.get("gender").isJsonNull()
+                        ? jsonData.get("gender").getAsString().trim().toLowerCase() : "";
+        String phone  = jsonData.has("phone")  && jsonData.get("phone")  != null && !jsonData.get("phone").isJsonNull()
+                        ? jsonData.get("phone").getAsString().trim() : "";
+        String address= jsonData.has("address")&& jsonData.get("address")!= null && !jsonData.get("address").isJsonNull()
+                        ? jsonData.get("address").getAsString().trim() : "";
+        String photo  = jsonData.has("photo")  && jsonData.get("photo")  != null && !jsonData.get("photo").isJsonNull()
+                        ? jsonData.get("photo").getAsString().trim() : "";
+
+        // 5. Validation: same rule as AddMemberAPI (photo optional)
+        if (name.isEmpty() || dob.isEmpty() || gender.isEmpty() || phone.isEmpty() || address.isEmpty()) {
+            jsonResponse.addProperty("success", false);
+            jsonResponse.addProperty("message", "All fields except Photo are required.");
+            out.print(gson.toJson(jsonResponse));
+            out.flush();
+            return;
+        }
+
+        // 6. DB update
         Connection conn = null;
         PreparedStatement stmt = null;
 
@@ -143,36 +161,41 @@ public class EditMemberAPI extends HttpServlet {
             Class.forName("com.mysql.cj.jdbc.Driver");
             conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
 
-            String sql = "UPDATE member SET Name=?, Gender=?, Photo=?, Address=?, Phone_no=?, DOB=? WHERE Member_ID=?";
+            String sql = "UPDATE member SET Name=?, DOB=?, Gender=?, Phone_no=?, Address=?, Photo=? WHERE Member_ID=?";
             stmt = conn.prepareStatement(sql);
             stmt.setString(1, name);
-            stmt.setString(2, gender);
-            stmt.setString(3, photo);
-            stmt.setString(4, address);
-            stmt.setString(5, phone);
-            stmt.setString(6, dob);
+            stmt.setString(2, dob);
+            stmt.setString(3, gender);
+            stmt.setString(4, phone);
+            stmt.setString(5, address);
+            stmt.setString(6, photo);
             stmt.setString(7, oldMemberId);
 
             int rowsUpdated = stmt.executeUpdate();
 
             if (rowsUpdated > 0) {
-                out.print("{\"success\":true,\"message\":\"Member updated successfully\"}");
+                jsonResponse.addProperty("success", true);
+                jsonResponse.addProperty("message", "Member updated successfully.");
             } else {
-                response.setStatus(HttpServletResponse.SC_NOT_FOUND);
-                out.print("{\"success\":false,\"error\":\"Member not found\"}");
+                jsonResponse.addProperty("success", false);
+                jsonResponse.addProperty("message", "Member not found.");
             }
 
         } catch (ClassNotFoundException e) {
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            out.print("{\"success\":false,\"error\":\"JDBC Driver not found\"}");
+            jsonResponse.addProperty("success", false);
+            jsonResponse.addProperty("message", "JDBC Driver not found.");
         } catch (SQLException e) {
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            out.print("{\"success\":false,\"error\":\"Database error: " + e.getMessage() + "\"}");
+            jsonResponse.addProperty("success", false);
+            jsonResponse.addProperty("message", "Database error: " + e.getMessage());
         } finally {
             try {
-                if (stmt != null) stmt.close();
-                if (conn != null) conn.close();
-            } catch (SQLException ignored) {}
-        }
-    }
+                    if (stmt != null) stmt.close();
+                    if (conn != null) conn.close();
+                } catch (SQLException ignored) {}
+           }
+
+           // 7. Send final JSON response
+           out.print(gson.toJson(jsonResponse));
+           out.flush();
+           }
 }

@@ -79,19 +79,20 @@ public class MemberCardDetail extends HttpServlet {
         JSONObject obj = new JSONObject();   
 
         try {  
-            Class.forName("com.mysql.jdbc.Driver");  
+            Class.forName("com.mysql.cj.jdbc.Driver");  
             Connection con = DriverManager.getConnection(URL, USER, PASS);  
 
             // TOTAL MEMBERS (only those with membership records) - active + expired
             String totalQuery = """
-                SELECT COUNT(DISTINCT m.member_id) 
-                FROM member m 
-                INNER JOIN membership mem ON m.member_id = mem.member_id
-            """;
-            PreparedStatement ps1 = con.prepareStatement(totalQuery);  
-            ResultSet rs1 = ps1.executeQuery();  
-            rs1.next();  
-            obj.put("total_members", rs1.getInt(1));  
+                    SELECT COUNT(DISTINCT m.member_id)
+                    FROM member m
+                    """;
+
+            PreparedStatement ps1 = con.prepareStatement(totalQuery);
+            ResultSet rs1 = ps1.executeQuery();
+            rs1.next();
+            obj.put("total_members", rs1.getInt(1));
+  
 
             // ACTIVE MEMBERS: Members whose LATEST membership end_date >= CURDATE()
             String activeQuery = """

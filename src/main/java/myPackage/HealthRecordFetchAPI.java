@@ -15,11 +15,18 @@ import java.sql.*;
 @WebServlet("/HealthRecordFetchAPI")
 public class HealthRecordFetchAPI extends HttpServlet {
 
-    private static final String URL  = "jdbc:mysql://localhost:3306/gym";      // <- your DB
+    private static final String URL  = "jdbc:mysql://localhost:3306/gym";
     private static final String USER = "root";
     private static final String PASS = "Ashish_mca@1234";
 
-    // Support GET (e.g., axios.get) and POST
+    // Helper: return "-" if value is null or empty, else return value
+    private String normalize(String value) {
+        if (value == null || value.trim().isEmpty()) {
+            return "-";
+        }
+        return value;
+    }
+
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response)
             throws ServletException, IOException {
@@ -52,8 +59,7 @@ public class HealthRecordFetchAPI extends HttpServlet {
                 return;
             }
 
-            // DB connection
-            Class.forName("com.mysql.cj.jdbc.Driver");  // modern driver
+            Class.forName("com.mysql.cj.jdbc.Driver");
             try (Connection conn = DriverManager.getConnection(URL, USER, PASS);
                  PreparedStatement ps = conn.prepareStatement(
                      "SELECT * FROM health_records WHERE Member_ID = ?")) {
@@ -63,16 +69,18 @@ public class HealthRecordFetchAPI extends HttpServlet {
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
                         obj.put("status", "success");
-                        obj.put("member_id", rs.getString("Member_ID"));
-                        obj.put("current_medication", rs.getString("Curr_Medication"));
-                        obj.put("supplement", rs.getString("Supplement"));
-                        obj.put("smoke", rs.getString("Smoke"));
-                        obj.put("allergy", rs.getString("Allergy"));
-                        obj.put("injury", rs.getString("Injury"));
-                        obj.put("medical_history", rs.getString("Medical_History"));
-                        obj.put("diet_preference", rs.getString("Diet_Preference"));
-                        obj.put("drink", rs.getString("Drink"));
-                        obj.put("surgery", rs.getString("Surgery"));
+
+                        // Every field uses normalize: DB NULL or "" -> "-"
+                        obj.put("member_id", normalize(rs.getString("Member_ID")));
+                        obj.put("current_medication", normalize(rs.getString("Curr_Medication")));
+                        obj.put("supplement", normalize(rs.getString("Supplement")));
+                        obj.put("smoke", normalize(rs.getString("Smoke")));
+                        obj.put("allergy", normalize(rs.getString("Allergy")));
+                        obj.put("injury", normalize(rs.getString("Injury")));
+                        obj.put("medical_history", normalize(rs.getString("Medical_History")));
+                        obj.put("diet_preference", normalize(rs.getString("Diet_Preference")));
+                        obj.put("drink", normalize(rs.getString("Drink")));
+                        obj.put("surgery", normalize(rs.getString("Surgery")));
                     } else {
                         obj.put("status", "not_found");
                         obj.put("message", "No record found for this member_id");

@@ -17,6 +17,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -27,7 +28,6 @@ public class AddProgressAPI extends HttpServlet {
     private static final String USER = "root";
     private static final String PASS = "Ashish_mca@1234";
 
-    // Frontend sends yyyy-MM-dd
     private static final DateTimeFormatter INPUT_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private static final DateTimeFormatter DB_FMT    = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
@@ -42,89 +42,124 @@ public class AddProgressAPI extends HttpServlet {
         JsonObject jsonResp = new JsonObject();
 
         try {
-            // 1. Member id from query parameter
+            // ----- MEMBER ID -----
             String memberIdParam = request.getParameter("id");
-            if (memberIdParam == null || memberIdParam.isEmpty()) {
-                response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
-                jsonResp.addProperty("success", false);
-                jsonResp.addProperty("message", "Member id is required as parameter 'id'.");
-            } else {
+            if (memberIdParam == null || memberIdParam.trim().isEmpty()) {
+                sendError(response, gson, "Member id is required as parameter 'id'.");
+                return;
+            }
 
-                int memberId = Integer.parseInt(memberIdParam);
+            int memberId = Integer.parseInt(memberIdParam);
 
-                // 2. Read JSON body
-                StringBuilder sb = new StringBuilder();
-                try (BufferedReader reader = request.getReader()) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        sb.append(line);
-                    }
+            // ----- READ BODY -----
+            StringBuilder sb = new StringBuilder();
+            try (BufferedReader reader = request.getReader()) {
+                String line;
+                while ((line = reader.readLine()) != null) sb.append(line);
+            }
+
+            JsonObject body = JsonParser.parseString(sb.toString()).getAsJsonObject();
+
+            // ----- VALIDATION FIXED -----
+            String[] requiredFields = {
+                "date","height","weight","arms","chest",
+                "shoulder","back","waist","thighs",
+                "muscle_percent","fat_percent"
+            };
+
+            for (String field : requiredFields) {
+                if (!body.has(field)) {
+                    sendError(response, gson, "All fields are required.");
+                    return;
                 }
-                JsonObject body = JsonParser.parseString(sb.toString()).getAsJsonObject();
 
-                // keys from frontend: date, height, weight, arms, chest, shoulder, back,
-                // waist, thighs, muscle_percent, fat_percent (bmi ignored)
+                JsonElement el = body.get(field);
 
-                String dateStr = body.get("date").getAsString();
-                LocalDate localDate = LocalDate.parse(dateStr, INPUT_FMT);
-                String dbDateStr = localDate.format(DB_FMT);
-                Date sqlDate = Date.valueOf(dbDateStr);
+                if (el == null || el.isJsonNull()) {
+                    sendError(response, gson, "All fields are required.");
+                    return;
+                }
 
-                float heightCm = body.get("height").getAsFloat();
-                float weightKg = body.get("weight").getAsFloat();
-
-                float arms     = body.get("arms").getAsFloat();
-                float chest    = body.get("chest").getAsFloat();
-                float shoulder = body.get("shoulder").getAsFloat();
-                float back     = body.get("back").getAsFloat();
-                float waist    = body.get("waist").getAsFloat();
-                float thighs   = body.get("thighs").getAsFloat();
-                float muscle   = body.get("muscle_percent").getAsFloat();
-                float fat      = body.get("fat_percent").getAsFloat();
-
-                Class.forName("com.mysql.cj.jdbc.Driver");
-                try (Connection con = DriverManager.getConnection(URL, USER, PASS);
-                     PreparedStatement ps = con.prepareStatement(
-                        "INSERT INTO progress_chart "
-                      + "(Member_ID, Date, Height, Weight, Arms, Chest, Shoulder, Back, Waist, Thighs, Muscle, Fat) "
-                      + "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")) {
-
-                    ps.setInt(1, memberId);
-                    ps.setDate(2, sqlDate);
-                    ps.setFloat(3, heightCm);
-                    ps.setFloat(4, weightKg);
-                    ps.setFloat(5, arms);
-                    ps.setFloat(6, chest);
-                    ps.setFloat(7, shoulder);
-                    ps.setFloat(8, back);
-                    ps.setFloat(9, waist);
-                    ps.setFloat(10, thighs);
-                    ps.setFloat(11, muscle);
-                    ps.setFloat(12, fat);
-
-                    int rowsInserted = ps.executeUpdate();
-                    if (rowsInserted > 0) {
-                        response.setStatus(HttpServletResponse.SC_OK);
-                        jsonResp.addProperty("success", true);
-                        jsonResp.addProperty("message", "Progress data inserted successfully.");
-                    } else {
-                        response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-                        jsonResp.addProperty("success", false);
-                        jsonResp.addProperty("message", "Failed to insert progress data.");
+                // If string → check empty
+                if (el.isJsonPrimitive() && el.getAsJsonPrimitive().isString()) {
+                    if (el.getAsString().trim().isEmpty()) {
+                        sendError(response, gson, "All fields are required.");
+                        return;
                     }
                 }
             }
+
+            // ----- DATE -----
+            LocalDate localDate = LocalDate.parse(body.get("date").getAsString(), INPUT_FMT);
+            Date sqlDate = Date.valueOf(localDate.format(DB_FMT));
+
+            // ----- FLOAT VALUES -----
+            float heightCm = body.get("height").getAsFloat();
+            float weightKg = body.get("weight").getAsFloat();
+            float arms     = body.get("arms").getAsFloat();
+            float chest    = body.get("chest").getAsFloat();
+            float shoulder = body.get("shoulder").getAsFloat();
+            float back     = body.get("back").getAsFloat();
+            float waist    = body.get("waist").getAsFloat();
+            float thighs   = body.get("thighs").getAsFloat();
+            float muscle   = body.get("muscle_percent").getAsFloat();
+            float fat      = body.get("fat_percent").getAsFloat();
+
+            Class.forName("com.mysql.cj.jdbc.Driver");
+
+            // ----- SQL INSERT -----
+            try (Connection con = DriverManager.getConnection(URL, USER, PASS);
+                PreparedStatement ps = con.prepareStatement(
+                    "INSERT INTO progress_chart "
+                    + "(Member_ID, Date, Height, Weight, Arms, Chest, Shoulder, Back, Waist, Thighs, Muscle, Fat) "
+                    + "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)")) {
+
+                ps.setInt(1, memberId);
+                ps.setDate(2, sqlDate);
+                ps.setFloat(3, heightCm);
+                ps.setFloat(4, weightKg);
+                ps.setFloat(5, arms);
+                ps.setFloat(6, chest);
+                ps.setFloat(7, shoulder);
+                ps.setFloat(8, back);
+                ps.setFloat(9, waist);
+                ps.setFloat(10, thighs);
+                ps.setFloat(11, muscle);
+                ps.setFloat(12, fat);
+
+                int rows = ps.executeUpdate();
+
+                if (rows > 0) {
+                    jsonResp.addProperty("success", true);
+                    jsonResp.addProperty("message", "Progress data inserted successfully.");
+                } else {
+                    sendError(response, gson, "Failed to insert progress data.");
+                    return;
+                }
+            }
+
         } catch (Exception e) {
             e.printStackTrace();
-            response.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-            jsonResp.addProperty("success", false);
-            jsonResp.addProperty("message", "Internal server error: " + e.getMessage());
+            sendError(response, gson, "Internal server error: " + e.getMessage());
+            return;
         }
 
-        // Write JSON response once at the end
+        // ----- SEND SUCCESS -----
         try (PrintWriter out = response.getWriter()) {
             out.print(gson.toJson(jsonResp));
             out.flush();
+        }
+    }
+
+
+    // ----- REUSABLE ERROR METHOD -----
+    private void sendError(HttpServletResponse response, Gson gson, String msg) throws IOException {
+        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        JsonObject err = new JsonObject();
+        err.addProperty("success", false);
+        err.addProperty("message", msg);
+        try (PrintWriter out = response.getWriter()) {
+            out.print(gson.toJson(err));
         }
     }
 }

@@ -30,23 +30,7 @@ public class AddMemberAPI extends HttpServlet {
     private static final String DB_USER = "root";
     private static final String DB_PASSWORD = "Ashish_mca@1234";
 
-    private static final List<String> ALLOWED_ORIGINS = Arrays.asList(
-            "http://localhost:5173",
-            "https://wellness-management-system.vercel.app",
-            "https://admonitorial-cinderella-hungerly.ngrok-free.dev"
-        );
-
-    protected void addCORSHeaders(HttpServletRequest request, HttpServletResponse response) {
-        String origin = request.getHeader("Origin");
-        if (origin != null && ALLOWED_ORIGINS.contains(origin)) {
-            response.setHeader("Access-Control-Allow-Origin", origin);
-        }
-        response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-        response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, ngrok-skip-browser-warning");
-        response.setHeader("Access-Control-Max-Age", "86400");
-    }
-    
-    private boolean isTokenValid(String token, HttpServletResponse response) throws IOException {
+        private boolean isTokenValid(String token, HttpServletResponse response) throws IOException {
         try {
             Jwts.parser()
                 .setSigningKey("RaJdNoqNevTsnjh9Vgbe/LgPCrbcjwTCfKWpBuOyPTM=".getBytes())
@@ -74,18 +58,8 @@ public class AddMemberAPI extends HttpServlet {
         out.print(err.toJSONString());
         out.flush();
     }
-
-
-    @Override
-    protected void doOptions(HttpServletRequest request, HttpServletResponse response)
-            throws IOException {
-        addCORSHeaders(request, response);
-        response.setStatus(HttpServletResponse.SC_OK);
-    }
-
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        addCORSHeaders(request, response);
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
         
